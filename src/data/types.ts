@@ -73,7 +73,7 @@ export interface TokenLot {
   tokenAmount: number
   status: TokenStatus
   linkedProductLot: string
-  blockchainRecordId: string
+  traceabilityId: string
 }
 
 export interface MarketplaceListing {

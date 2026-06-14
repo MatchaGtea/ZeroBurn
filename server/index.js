@@ -51,9 +51,9 @@ const verifications = [
 ]
 
 const tokens = [
-  { id: 'ZBT-2026-001', plotId: 'plot-a', season: '2025/26', harvestQuantity: '20 tons', tokenAmount: 50, status: 'linked', linkedProductLot: 'ZB-2026-001', blockchainRecordId: 'TRC-NSW-001' },
-  { id: 'ZBT-2026-002', plotId: 'plot-a', season: '2025/26', harvestQuantity: '12 tons', tokenAmount: 70, status: 'available', linkedProductLot: 'Unlinked', blockchainRecordId: 'TRC-NSW-002' },
-  { id: 'ZBT-2025-SOLD', plotId: 'plot-c', season: '2024/25', harvestQuantity: '18 tons', tokenAmount: 60, status: 'sold', linkedProductLot: 'ZB-2025-009', blockchainRecordId: 'TRC-NSW-OLD' },
+  { id: 'ZBT-2026-001', plotId: 'plot-a', season: '2025/26', harvestQuantity: '20 tons', tokenAmount: 50, status: 'linked', linkedProductLot: 'ZB-2026-001', traceabilityId: 'TRC-NSW-001' },
+  { id: 'ZBT-2026-002', plotId: 'plot-a', season: '2025/26', harvestQuantity: '12 tons', tokenAmount: 70, status: 'available', linkedProductLot: 'Unlinked', traceabilityId: 'TRC-NSW-002' },
+  { id: 'ZBT-2025-SOLD', plotId: 'plot-c', season: '2024/25', harvestQuantity: '18 tons', tokenAmount: 60, status: 'sold', linkedProductLot: 'ZB-2025-009', traceabilityId: 'TRC-NSW-OLD' },
 ]
 
 const marketplace = [
