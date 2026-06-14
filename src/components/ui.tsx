@@ -1,5 +1,5 @@
 import type React from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import type { Certificate, MarketplaceListing, Plot, PlotStatus, RecordStatus, TokenLot, VerificationStatus } from '../data/types'
 
 type IconProps = { size?: number; className?: string }
@@ -82,20 +82,18 @@ export const icons = {
 export const navItems = [
   { to: '/', label: 'Dashboard', icon: Home },
   { to: '/plots', label: 'My Plots', icon: Map },
-  { to: '/planting', label: 'Planting Records', icon: Sprout },
-  { to: '/harvest', label: 'Harvest Records', icon: Wheat },
-  { to: '/verification', label: 'Verification', icon: ShieldCheck },
-  { to: '/wallet', label: 'Token Wallet', icon: WalletCards },
-  { to: '/marketplace', label: 'Marketplace', icon: ShoppingBag },
-  { to: '/certificates', label: 'Certificates', icon: FileCheck2 },
+  { to: '/records', label: 'Records', icon: ClipboardCheck },
+  { to: '/status', label: 'Zero-Burn Status', icon: ShieldCheck },
+  { to: '/token-marketplace', label: 'Token & Marketplace', icon: ShoppingBag },
   { to: '/profile', label: 'Profile', icon: User },
 ]
 
 export const mobileNavItems = [
   { to: '/', label: 'Home', icon: Home },
   { to: '/plots', label: 'Plots', icon: Map },
-  { to: '/planting', label: 'Records', icon: ClipboardCheck },
-  { to: '/wallet', label: 'Wallet', icon: WalletCards },
+  { to: '/records', label: 'Records', icon: ClipboardCheck },
+  { to: '/status', label: 'Status', icon: ShieldCheck },
+  { to: '/token-marketplace', label: 'Sell', icon: ShoppingBag },
   { to: '/profile', label: 'Profile', icon: User },
 ]
 
@@ -105,7 +103,7 @@ export function Brand() {
       <div className="brand-mark"><Leaf size={30} /></div>
       <div>
         <strong>Zero-Burn Farmer</strong>
-        <span>Traceable. Sustainable. Profitable.</span>
+        <span>Simple farm traceability</span>
       </div>
     </div>
   )
@@ -144,18 +142,17 @@ export function Header({ onQuickAction }: { onQuickAction: () => void }) {
     <header className="topbar">
       <div className="searchbox">
         <Search size={18} />
-        <input aria-label="Search plots and records" placeholder="Search plots, records, certificates..." />
+        <input aria-label="Search plots and records" placeholder="Search plots, records..." />
       </div>
       <button className="season-button"><CalendarDays size={18} /> Season 2025/26 <ChevronDown size={16} /></button>
       <button className="icon-button" aria-label="Notifications"><Bell size={19} /><span className="dot">3</span></button>
       <div className="user-chip"><div className="avatar small">SF</div><span>Somchai Farm</span><ChevronDown size={15} /></div>
-      <button className="button primary" onClick={onQuickAction}><Plus size={17} /> Quick Action</button>
+      <button className="button primary" onClick={onQuickAction}><Plus size={17} /> Next Action</button>
     </header>
   )
 }
 
 export function MobileNav() {
-  const location = useLocation()
   return (
     <nav className="mobile-nav">
       {mobileNavItems.map((item) => (
@@ -164,10 +161,6 @@ export function MobileNav() {
           <span>{item.label}</span>
         </NavLink>
       ))}
-      <NavLink to="/marketplace" className={`mobile-nav-item ${location.pathname === '/marketplace' ? 'active' : ''}`}>
-        <Menu size={21} />
-        <span>More</span>
-      </NavLink>
     </nav>
   )
 }
