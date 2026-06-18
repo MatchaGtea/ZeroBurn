@@ -2,6 +2,8 @@
 
 Mobile-first farmer web app prototype rebuilt from the Figma `Prototype / ZeroBurn Farmer Mobile UX v3` design.
 
+[Open the live app](https://matchagtea.github.io/ZeroBurn/)
+
 The app focuses on the real farmer workflow:
 
 `ลงทะเบียน -> โฉนด -> ขอบเขตแปลง -> ปลูก -> เก็บเกี่ยว -> หลักฐานไม่เผา -> ตรวจ -> ได้แต้ม -> ลงขาย`
@@ -51,6 +53,18 @@ npm run dev
 ```
 
 Stop the lightweight database with `npm run db:local:stop`.
+
+## GitHub Pages
+
+GitHub Pages serves the static build from the `gh-pages` branch. Build it in
+LocalStorage prototype mode with:
+
+```bash
+VITE_API_BASE='' npm run build
+```
+
+GitHub Actions is currently unavailable for this account, so the generated
+`dist` directory is published to `gh-pages` manually.
 
 ## Handoff
 

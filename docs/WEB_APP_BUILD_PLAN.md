@@ -133,7 +133,7 @@ The app derives dashboard Next Action from workflow state and latest records, no
 - [x] Automated API tests: 10 passing
 - [x] Postgres full-workflow smoke test: plot -> planting -> harvest -> evidence -> token -> listing -> sold
 - [x] Browser interaction QA for listing and plot-confirmation flows
-- [x] GitHub Pages deployment workflow
+- [x] GitHub Pages static build and `gh-pages` deployment path
 
 ## Progress Log
 
@@ -155,4 +155,5 @@ The app derives dashboard Next Action from workflow state and latest records, no
 - Real file storage provider is not selected yet.
 - Real external API contracts are not available yet.
 - GitHub Pages currently uses LocalStorage fallback; a hosted API/database deployment target is not selected yet.
+- GitHub Actions cannot start while the account has a billing lock, so Pages is deployed directly through the legacy `gh-pages` branch.
 - Prisma CLI currently reports moderate advisories in its dev-only dependency chain; the available automated fix is an incompatible Prisma downgrade.
