@@ -63,6 +63,7 @@ model FarmerProfile {
   address        String?
   consent        Boolean         @default(false)
   workflowStatus WorkflowStatus  @default(registration)
+  authUserId     String?         @unique
   plots          Plot[]
   uploads        UploadedFile[]
   workflowEvents WorkflowEvent[]
@@ -98,17 +99,26 @@ model Plot {
 }
 
 model LandDocument {
-  id                 String        @id @default(cuid())
-  plotId             String
-  plot               Plot          @relation(fields: [plotId], references: [id])
-  uploadedFileId     String?
-  uploadedFile       UploadedFile? @relation(fields: [uploadedFileId], references: [id])
-  documentType       String        @default("title_deed_mock")
-  ocrStatus          String        @default("mock_pending")
-  boundaryStatus     String        @default("mock_pending")
-  externalRequestId  String?
-  externalRawPayload Json?
-  createdAt          DateTime      @default(now())
+  id                   String        @id @default(cuid())
+  plotId               String
+  plot                 Plot          @relation(fields: [plotId], references: [id])
+  uploadedFileId       String?
+  uploadedFile         UploadedFile? @relation(fields: [uploadedFileId], references: [id])
+  documentType         String        @default("title_deed_mock")
+  ocrStatus            String        @default("mock_pending")
+  boundaryStatus       String        @default("mock_pending")
+  externalRequestId    String?
+  externalRawPayload   Json?
+  provider             String?
+  providerStatus       String?
+  providerErrorCode    String?
+  providerErrorMessage String?
+  ocrResult            Json?
+  boundaryGeojson      Json?
+  submittedAt          DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
   @@index([plotId])
   @@index([uploadedFileId])
@@ -245,6 +255,11 @@ model UploadedFile {
   purpose             String
   storageProvider     String               @default("prototype_metadata")
   storageKey          String?
+  bucket              String?
+  sizeBytes           Int?
+  checksum            String?
+  uploadStatus        String               @default("pending")
+  uploadedAt          DateTime?
   createdAt           DateTime             @default(now())
   landDocuments       LandDocument[]
   plantingRecords     PlantingRecord[]

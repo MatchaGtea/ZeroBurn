@@ -857,11 +857,27 @@ p {
   grid-template-columns: 74px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
+  min-height: 100px;
   overflow: hidden;
   padding: 12px;
   border: 1px dashed rgba(21, 148, 71, 0.38);
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.upload-box:hover,
+.upload-box:focus-within {
+  border-color: var(--green);
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(21, 148, 71, 0.12);
+}
+
+.upload-box.has-file {
+  border-style: solid;
+  border-color: rgba(21, 148, 71, 0.52);
+  background: var(--green-soft);
 }
 
 .upload-box > img {
@@ -869,6 +885,18 @@ p {
   height: 74px;
   border-radius: 16px;
   object-fit: cover;
+}
+
+.upload-copy {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 4px 7px;
+  align-items: center;
+}
+
+.upload-copy > svg {
+  color: var(--green-deep);
 }
 
 .upload-box strong {
@@ -880,11 +908,36 @@ p {
   font-weight: 950;
 }
 
+.upload-copy > span {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.upload-copy .upload-action {
+  margin-top: 2px;
+  color: var(--green-deep);
+  font-size: 13px;
+  font-weight: 950;
+}
+
 .upload-box input {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   opacity: 0;
   cursor: pointer;
+}
+
+.profile-next-step {
+  min-height: 54px;
+  padding: 12px 14px;
+  border: 1px solid rgba(47, 125, 217, 0.2);
+  border-radius: 16px;
+  color: #155da4;
+  background: var(--blue-soft);
+  line-height: 1.4;
 }
 
 .mini-boundary {
@@ -1079,4 +1132,52 @@ p {
   .form-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Authentication Screens styling */
+.login-shell {
+  background: linear-gradient(135deg, #e3ede3 0%, #f4f7f3 100%) !important;
+}
+
+.centered-content {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: 100%;
+}
+
+.login-card {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.login-mascot {
+  width: 130px;
+  height: 130px;
+  border-radius: 28px;
+  background: linear-gradient(145deg, #fff8e8, #e3f6e8);
+  margin-bottom: 8px;
+}
+
+.login-subtitle {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.pad-all {
+  padding: 18px;
+}
+
+.login-card .segmented {
+  width: 100%;
+  margin-bottom: 8px;
 }

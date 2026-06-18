@@ -3,15 +3,13 @@
 ## Progress
 
 - Status: In Progress
-- Last updated: 2026-06-18 17:04 +07
-- Current owner: Codex (GPT-5.5 Medium workers reviewed by Codex)
-- Next task: Select auth and file-storage providers, then replace the first mock external adapter with its real API contract
+- Last updated: 2026-06-18 17:55 +07
+- Current owner: Antigravity
+- Next task: Step 6: Connect real verification/carbon/token APIs and marketplace buyer platform integrations.
 
 ## Current Checkpoint
 
-Step 4 is complete: the mobile UX is connected to the Express API with real async submit/error feedback, and the API now supports both in-memory and Postgres repositories. Postgres migration, idempotent seed, repository integrity checks, and an end-to-end workflow from plot creation through sold listing have passed against a local Prisma database. GitHub Pages keeps a LocalStorage fallback because it has no hosted API yet.
-
-Implementation tasks in this checkpoint were delegated to GPT-5.5 Medium workers. Codex reviewed their diffs, returned corrections for strict server typechecking and repository integrity, then independently reran automated, database, API, and browser checks.
+Step 5 is complete. Supabase Auth, private file storage (Supabase Storage buckets), and asynchronous HTTP land deed adapter integration (with retry logic and idempotency key preservation) have been implemented, connected across frontend and backend, and validated.
 
 ## Product Goal
 
@@ -117,7 +115,7 @@ The app derives dashboard Next Action from workflow state and latest records, no
 ### API Integrations
 
 - [x] Mock adapter interfaces created
-- [ ] Connect real land deed/boundary API
+- [x] Connect real land deed/boundary API
 - [ ] Connect real verification/carbon/token APIs
 - [ ] Connect real marketplace API
 
@@ -148,6 +146,32 @@ The app derives dashboard Next Action from workflow state and latest records, no
 - 2026-06-18: Added indexed Prisma migration, Decimal marketplace pricing, Prisma 7 PostgreSQL adapter, and idempotent Somchai Farm seed data. Applied the migration and ran the seed twice against a local Prisma Postgres server.
 - 2026-06-18: Added a Prisma repository implementing all core endpoints, ownership/integrity validation, graceful shutdown, and memory/Postgres runtime selection.
 - 2026-06-18: Connected frontend mutations to backend responses, added submit/error feedback, fixed plot boundary confirmation, and verified mobile sell and plot workflows in the in-app browser.
+- 2026-06-18: Completed Step 5. Integrated file uploading via `uploadFileToStorage` into React forms (deed, planting, harvest, and evidence) and updated MemoryRepository/app endpoints to resolve and store file IDs properly.
+
+## Step 6: Real Verification, Carbon Token & Marketplace Integrations (Future Steps)
+
+### 1. Burn Verification API (Sentinel-2 / GISTDA Integration)
+- Define `BurnVerificationAdapter` to swap out `mockBurnEvidence`.
+- Submit the plot's coordinates (GeoJSON) and date range to the satellite hotspot checking service.
+- Implement async polling or webhook callbacks to receive the satellite burn verification result.
+- Store results, confidence scores, and raw payloads on the database `Verification` record.
+
+### 2. Carbon Assessment & Token Minting API
+- Implement a typed HTTP adapter connecting to the carbon evaluation provider.
+- Submit the verified harvested area, yield tonnage, crop variety, and non-burn verification proof.
+- Calculate carbon savings (kg CO2e) and resolve corresponding ZeroBurn token rewards dynamically.
+- Interface with the ledger/token registry to mint and credit tokens to the farmer's wallet account.
+
+### 3. Marketplace Buyer Platform Integration
+- Update listing actions to publish the crop listings directly to a shared buyer-facing platform.
+- Build a secure webhook endpoint `/api/v1/integrations/marketplace/callback` to handle purchase completion events.
+- Implement atomic transactions to transfer token ownership and mark listings as `sold` automatically upon payment confirmation.
+
+### 4. Production Environment Configuration
+- Add credentials in `.env` for:
+  - `SATELLITE_VERIFICATION_API_URL` / `SATELLITE_API_KEY`
+  - `CARBON_REGISTRY_MINT_URL` / `CARBON_REGISTRY_KEY`
+  - `MARKETPLACE_PARTNER_SECRET` (for webhooks validation)
 
 ## Open Issues
 

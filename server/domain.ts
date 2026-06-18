@@ -27,6 +27,7 @@ export interface FarmerProfile {
   address: string
   consent: boolean
   workflowStatus: WorkflowStatus
+  authUserId?: string
 }
 
 export interface Plot {
@@ -42,6 +43,42 @@ export interface Plot {
   documentStatus: string
 }
 
+export interface UploadedFile {
+  id: string
+  farmerId: string
+  fileName: string
+  fileType: string
+  purpose: string
+  storageProvider: string
+  storageKey: string
+  bucket?: string
+  sizeBytes?: number
+  checksum?: string
+  uploadStatus: 'pending' | 'uploaded' | 'failed' | 'deleted'
+  uploadedAt?: string
+  createdAt: string
+}
+
+export interface LandDocument {
+  id: string
+  plotId: string
+  uploadedFileId?: string
+  documentType: string
+  ocrStatus: string
+  boundaryStatus: string
+  externalRequestId?: string
+  provider?: string
+  providerStatus?: string
+  providerErrorCode?: string
+  providerErrorMessage?: string
+  ocrResult?: unknown
+  boundaryGeojson?: unknown
+  submittedAt?: string
+  completedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface PlantingRecord {
   id: string
   plotId: string
@@ -52,6 +89,7 @@ export interface PlantingRecord {
   photoFileName: string
   notes: string
   status: 'draft' | 'submitted' | 'complete'
+  photoFileId?: string
 }
 
 export interface HarvestRecord {
@@ -65,6 +103,7 @@ export interface HarvestRecord {
   photoFileName: string
   notes: string
   status: 'draft' | 'submitted' | 'linked'
+  photoFileId?: string
 }
 
 export interface Verification {
@@ -132,4 +171,57 @@ export interface AppData {
   verifications: Verification[]
   tokens: TokenLot[]
   marketplaceListings: MarketplaceListing[]
+}
+
+export interface UploadIntentInput {
+  fileName: string
+  contentType: string
+  sizeBytes: number
+  purpose: 'land_deed' | 'evidence' | 'farm_record'
+}
+
+export interface UploadIntentResult {
+  uploadId: string
+  bucket: string
+  storageKey: string
+  signedUploadUrl: string
+  expiresAt: string
+}
+
+export interface LandDeedJob {
+  requestId: string
+  status: 'queued' | 'processing' | 'succeeded' | 'failed'
+}
+
+export interface LandDeedResult {
+  requestId: string
+  status: 'succeeded' | 'failed'
+  document?: {
+    titleDeedNumber: string
+    surveyPage: string
+    parcelNumber: string
+    subdistrict: string
+    district: string
+    province: string
+    area: {
+      rai: number
+      ngan: number
+      squareWa: number
+    }
+  }
+  boundary?: {
+    type: 'Polygon'
+    coordinates: number[][][]
+  }
+  confidence?: {
+    overall: number
+    fields: Record<string, number>
+  }
+  warnings?: string[]
+  error?: {
+    code: string
+    message: string
+    retryable: boolean
+    providerRequestId?: string
+  }
 }

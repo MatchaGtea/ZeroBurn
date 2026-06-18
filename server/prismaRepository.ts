@@ -9,6 +9,8 @@ import type {
   TokenLot,
   Verification,
   WorkflowStatus,
+  UploadedFile,
+  LandDocument,
 } from './domain'
 import type { AppPrismaClient } from './prismaClient'
 import type {
@@ -23,7 +25,6 @@ import type {
 } from './repository'
 import { buildWorkflow } from './repository'
 
-const FARMER_ID = 'farmer-somchai'
 
 type PlotRow = Prisma.PlotGetPayload<{
   include: { landDocuments: { orderBy: { createdAt: 'desc' }; take: 1 } }
@@ -199,12 +200,84 @@ function mapListing(row: {
   }
 }
 
+function mapUploadedFile(row: {
+  id: string
+  farmerId: string | null
+  fileName: string
+  fileType: string
+  purpose: string
+  storageProvider: string
+  storageKey: string | null
+  bucket: string | null
+  sizeBytes: number | null
+  checksum: string | null
+  uploadStatus: string
+  uploadedAt: Date | null
+  createdAt: Date
+}): UploadedFile {
+  return {
+    id: row.id,
+    farmerId: row.farmerId ?? '',
+    fileName: row.fileName,
+    fileType: row.fileType,
+    purpose: row.purpose,
+    storageProvider: row.storageProvider,
+    storageKey: row.storageKey ?? '',
+    bucket: row.bucket ?? undefined,
+    sizeBytes: row.sizeBytes ?? undefined,
+    checksum: row.checksum ?? undefined,
+    uploadStatus: (row.uploadStatus as any) || 'pending',
+    uploadedAt: row.uploadedAt?.toISOString(),
+    createdAt: row.createdAt.toISOString(),
+  }
+}
+
+function mapLandDocument(row: {
+  id: string
+  plotId: string
+  uploadedFileId: string | null
+  documentType: string
+  ocrStatus: string
+  boundaryStatus: string
+  externalRequestId: string | null
+  provider: string | null
+  providerStatus: string | null
+  providerErrorCode: string | null
+  providerErrorMessage: string | null
+  ocrResult: any
+  boundaryGeojson: any
+  submittedAt: Date | null
+  completedAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+}): LandDocument {
+  return {
+    id: row.id,
+    plotId: row.plotId,
+    uploadedFileId: row.uploadedFileId ?? undefined,
+    documentType: row.documentType,
+    ocrStatus: row.ocrStatus,
+    boundaryStatus: row.boundaryStatus,
+    externalRequestId: row.externalRequestId ?? undefined,
+    provider: row.provider ?? undefined,
+    providerStatus: row.providerStatus ?? undefined,
+    providerErrorCode: row.providerErrorCode ?? undefined,
+    providerErrorMessage: row.providerErrorMessage ?? undefined,
+    ocrResult: row.ocrResult ?? undefined,
+    boundaryGeojson: row.boundaryGeojson ?? undefined,
+    submittedAt: row.submittedAt?.toISOString(),
+    completedAt: row.completedAt?.toISOString(),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  }
+}
+
 export class PrismaRepository implements Repository {
   constructor(private readonly prisma: AppPrismaClient) {}
 
-  private async requireOwnedPlot(client: Prisma.TransactionClient, plotId: string) {
+  private async requireOwnedPlot(client: Prisma.TransactionClient, farmerId: string, plotId: string) {
     const plot = await client.plot.findFirst({
-      where: { id: plotId, farmerId: FARMER_ID },
+      where: { id: plotId, farmerId },
       select: { id: true },
     })
     if (!plot) throw httpError('Plot not found', 404)
@@ -213,16 +286,17 @@ export class PrismaRepository implements Repository {
 
   private async updateWorkflow(
     client: Prisma.TransactionClient,
+    farmerId: string,
     status: WorkflowStatus,
     label = `Workflow advanced to ${status}`,
   ) {
     await client.farmerProfile.update({
-      where: { id: FARMER_ID },
+      where: { id: farmerId },
       data: { workflowStatus: status },
     })
     await client.workflowEvent.create({
       data: {
-        farmerId: FARMER_ID,
+        farmerId,
         status,
         label,
         metadata: { source: 'api' },
@@ -230,7 +304,7 @@ export class PrismaRepository implements Repository {
     })
   }
 
-  async getAppData(): Promise<AppData> {
+  async getAppData(farmerId: string): Promise<AppData> {
     const [
       profileRow,
       plotRows,
@@ -240,39 +314,39 @@ export class PrismaRepository implements Repository {
       tokenRows,
       listingRows,
     ] = await Promise.all([
-      this.prisma.farmerProfile.findUnique({ where: { id: FARMER_ID } }),
+      this.prisma.farmerProfile.findUnique({ where: { id: farmerId } }),
       this.prisma.plot.findMany({
-        where: { farmerId: FARMER_ID },
+        where: { farmerId },
         include: { landDocuments: { orderBy: { createdAt: 'desc' }, take: 1 } },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.plantingRecord.findMany({
-        where: { plot: { farmerId: FARMER_ID } },
+        where: { plot: { farmerId } },
         include: { photoFile: true },
         orderBy: { plantingDate: 'desc' },
       }),
       this.prisma.harvestRecord.findMany({
-        where: { plot: { farmerId: FARMER_ID } },
+        where: { plot: { farmerId } },
         include: { photoFile: true },
         orderBy: { harvestDate: 'desc' },
       }),
       this.prisma.verification.findMany({
-        where: { plot: { farmerId: FARMER_ID } },
+        where: { plot: { farmerId } },
         include: { evidence: true },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.carbonTokenLot.findMany({
-        where: { plot: { farmerId: FARMER_ID } },
+        where: { plot: { farmerId } },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.marketplaceListing.findMany({
-        where: { plot: { farmerId: FARMER_ID } },
+        where: { plot: { farmerId } },
         orderBy: { createdAt: 'desc' },
       }),
     ])
 
     if (!profileRow) {
-      throw httpError(`Farmer profile ${FARMER_ID} not found`, 404)
+      throw httpError(`Farmer profile ${farmerId} not found`, 404)
     }
 
     const profile = mapProfile(profileRow)
@@ -311,16 +385,16 @@ export class PrismaRepository implements Repository {
     }
   }
 
-  async setWorkflow(status: WorkflowStatus) {
-    await this.prisma.$transaction((client) => this.updateWorkflow(client, status))
+  async setWorkflow(farmerId: string, status: WorkflowStatus) {
+    await this.prisma.$transaction((client) => this.updateWorkflow(client, farmerId, status))
     return buildWorkflow(status)
   }
 
-  async updateProfile(input: ProfileUpdate) {
+  async updateProfile(farmerId: string, input: ProfileUpdate) {
     const workflowStatus = input.workflowStatus ?? 'deed_captured'
     const row = await this.prisma.$transaction(async (client) => {
       const profile = await client.farmerProfile.update({
-        where: { id: FARMER_ID },
+        where: { id: farmerId },
         data: {
           ownerName: input.ownerName,
           phone: input.phone,
@@ -334,7 +408,7 @@ export class PrismaRepository implements Repository {
       })
       await client.workflowEvent.create({
         data: {
-          farmerId: FARMER_ID,
+          farmerId,
           status: workflowStatus,
           label: 'Farmer profile updated',
           metadata: { source: 'api' },
@@ -345,18 +419,22 @@ export class PrismaRepository implements Repository {
     return mapProfile(row)
   }
 
-  async createPlot(input: CreatePlotInput, document: PlotDocumentInput = {}) {
+  async createPlot(farmerId: string, input: CreatePlotInput, document: PlotDocumentInput = {}) {
     const row = await this.prisma.$transaction(async (client) => {
       const farmer = await client.farmerProfile.findUnique({
-        where: { id: FARMER_ID },
+        where: { id: farmerId },
         select: { province: true, district: true },
       })
-      if (!farmer) throw httpError(`Farmer profile ${FARMER_ID} not found`, 404)
+      if (!farmer) throw httpError(`Farmer profile ${farmerId} not found`, 404)
 
-      const uploadedFile = document.fileName
+      const uploadedFile = document.uploadedFileId
+        ? await client.uploadedFile.findUnique({
+            where: { id: document.uploadedFileId },
+          })
+        : document.fileName
         ? await client.uploadedFile.create({
             data: {
-              farmerId: FARMER_ID,
+              farmerId,
               fileName: document.fileName,
               fileType: 'image/jpeg',
               purpose: 'land_document',
@@ -366,7 +444,7 @@ export class PrismaRepository implements Repository {
 
       const plot = await client.plot.create({
         data: {
-          farmerId: FARMER_ID,
+          farmerId,
           name: input.name,
           cropType: input.cropType,
           cropVariety: input.cropVariety || null,
@@ -390,16 +468,16 @@ export class PrismaRepository implements Repository {
         },
         include: { landDocuments: { orderBy: { createdAt: 'desc' }, take: 1 } },
       })
-      await this.updateWorkflow(client, 'deed_captured', 'Land document captured')
+      await this.updateWorkflow(client, farmerId, 'deed_captured', 'Land document captured')
       return plot
     })
     return mapPlot(row)
   }
 
-  async confirmBoundary(plotId: string, boundaryLabel: string) {
+  async confirmBoundary(farmerId: string, plotId: string, boundaryLabel: string) {
     const row = await this.prisma.$transaction(async (client) => {
       const existing = await client.plot.findFirst({
-        where: { id: plotId, farmerId: FARMER_ID },
+        where: { id: plotId, farmerId },
         include: { landDocuments: { orderBy: { createdAt: 'desc' }, take: 1 } },
       })
       if (!existing) return undefined
@@ -420,20 +498,24 @@ export class PrismaRepository implements Repository {
         data: { status: 'pending' },
         include: { landDocuments: { orderBy: { createdAt: 'desc' }, take: 1 } },
       })
-      await this.updateWorkflow(client, 'boundary_confirmed', 'Plot boundary confirmed')
+      await this.updateWorkflow(client, farmerId, 'boundary_confirmed', 'Plot boundary confirmed')
       return plot
     })
     return row ? mapPlot(row) : undefined
   }
 
-  async createPlanting(input: CreatePlantingInput) {
+  async createPlanting(farmerId: string, input: CreatePlantingInput) {
     const row = await this.prisma.$transaction(async (client) => {
-      await this.requireOwnedPlot(client, input.plotId)
+      await this.requireOwnedPlot(client, farmerId, input.plotId)
 
-      const photoFile = input.photoFileName
+      const photoFile = input.photoFileId
+        ? await client.uploadedFile.findUnique({
+            where: { id: input.photoFileId },
+          })
+        : input.photoFileName
         ? await client.uploadedFile.create({
             data: {
-              farmerId: FARMER_ID,
+              farmerId,
               fileName: input.photoFileName,
               fileType: 'image/jpeg',
               purpose: 'planting_evidence',
@@ -453,20 +535,24 @@ export class PrismaRepository implements Repository {
         },
         include: { photoFile: true },
       })
-      await this.updateWorkflow(client, 'planting_recorded', 'Planting record submitted')
+      await this.updateWorkflow(client, farmerId, 'planting_recorded', 'Planting record submitted')
       return record
     })
     return mapPlanting(row)
   }
 
-  async createHarvest(input: CreateHarvestInput) {
+  async createHarvest(farmerId: string, input: CreateHarvestInput) {
     const row = await this.prisma.$transaction(async (client) => {
-      await this.requireOwnedPlot(client, input.plotId)
+      await this.requireOwnedPlot(client, farmerId, input.plotId)
 
-      const photoFile = input.photoFileName
+      const photoFile = input.photoFileId
+        ? await client.uploadedFile.findUnique({
+            where: { id: input.photoFileId },
+          })
+        : input.photoFileName
         ? await client.uploadedFile.create({
             data: {
-              farmerId: FARMER_ID,
+              farmerId,
               fileName: input.photoFileName,
               fileType: 'image/jpeg',
               purpose: 'harvest_evidence',
@@ -487,25 +573,29 @@ export class PrismaRepository implements Repository {
         },
         include: { photoFile: true },
       })
-      await this.updateWorkflow(client, 'harvest_recorded', 'Harvest record submitted')
+      await this.updateWorkflow(client, farmerId, 'harvest_recorded', 'Harvest record submitted')
       return record
     })
     return mapHarvest(row)
   }
 
-  async submitEvidence(plotId: string, notes: string, evidence: EvidenceInput = {}) {
+  async submitEvidence(farmerId: string, plotId: string, notes: string, evidence: EvidenceInput = {}) {
     const row = await this.prisma.$transaction(async (client) => {
-      await this.requireOwnedPlot(client, plotId)
+      await this.requireOwnedPlot(client, farmerId, plotId)
 
       const harvest = await client.harvestRecord.findFirst({
-        where: { plotId, plot: { farmerId: FARMER_ID } },
+        where: { plotId, plot: { farmerId } },
         orderBy: { harvestDate: 'desc' },
         select: { id: true },
       })
-      const photoFile = evidence.photoFileName
+      const photoFile = evidence.uploadedFileId
+        ? await client.uploadedFile.findUnique({
+            where: { id: evidence.uploadedFileId },
+          })
+        : evidence.photoFileName
         ? await client.uploadedFile.create({
             data: {
-              farmerId: FARMER_ID,
+              farmerId,
               fileName: evidence.photoFileName,
               fileType: 'image/jpeg',
               purpose: 'burn_evidence',
@@ -535,16 +625,16 @@ export class PrismaRepository implements Repository {
         },
         include: { evidence: true },
       })
-      await this.updateWorkflow(client, 'checking_burn', 'Zero-Burn evidence submitted')
+      await this.updateWorkflow(client, farmerId, 'checking_burn', 'Zero-Burn evidence submitted')
       return verification
     })
     return mapVerification(row)
   }
 
-  async approveVerification(plotId: string) {
+  async approveVerification(farmerId: string, plotId: string) {
     await this.prisma.$transaction(async (client) => {
       const verification = await client.verification.findFirst({
-        where: { plotId, plot: { farmerId: FARMER_ID } },
+        where: { plotId, plot: { farmerId } },
         orderBy: { createdAt: 'desc' },
         select: { id: true, harvestRecordId: true },
       })
@@ -576,14 +666,14 @@ export class PrismaRepository implements Repository {
           },
         })
       }
-      await this.updateWorkflow(client, 'token_available', 'Zero-Burn token issued')
+      await this.updateWorkflow(client, farmerId, 'token_available', 'Zero-Burn token issued')
     })
-    return this.getAppData()
+    return this.getAppData(farmerId)
   }
 
-  async createListing(input: CreateListingInput) {
+  async createListing(farmerId: string, input: CreateListingInput) {
     const row = await this.prisma.$transaction(async (client) => {
-      await this.requireOwnedPlot(client, input.plotId)
+      await this.requireOwnedPlot(client, farmerId, input.plotId)
 
       const harvest = await client.harvestRecord.findUnique({
         where: { id: input.harvestRecordId },
@@ -627,16 +717,16 @@ export class PrismaRepository implements Repository {
           data: { status: 'attached' },
         })
       }
-      await this.updateWorkflow(client, 'listing_pending', 'Marketplace listing submitted')
+      await this.updateWorkflow(client, farmerId, 'listing_pending', 'Marketplace listing submitted')
       return listing
     })
     return mapListing(row)
   }
 
-  async markListing(status: 'listed' | 'sold') {
+  async markListing(farmerId: string, status: 'listed' | 'sold') {
     await this.prisma.$transaction(async (client) => {
       const listing = await client.marketplaceListing.findFirst({
-        where: { plot: { farmerId: FARMER_ID } },
+        where: { plot: { farmerId } },
         orderBy: { createdAt: 'desc' },
         select: { id: true, tokenLotId: true },
       })
@@ -652,8 +742,125 @@ export class PrismaRepository implements Repository {
           data: { status: 'sold' },
         })
       }
-      await this.updateWorkflow(client, status, `Marketplace listing marked ${status}`)
+      await this.updateWorkflow(client, farmerId, status, `Marketplace listing marked ${status}`)
     })
-    return this.getAppData()
+    return this.getAppData(farmerId)
+  }
+
+  async findProfileByAuthId(authUserId: string): Promise<FarmerProfile | undefined> {
+    const row = await this.prisma.farmerProfile.findUnique({
+      where: { authUserId },
+    })
+    return row ? mapProfile(row) : undefined
+  }
+
+  async createProfileWithAuth(authUserId: string, input: ProfileUpdate): Promise<FarmerProfile> {
+    const row = await this.prisma.$transaction(async (client) => {
+      const existing = await client.farmerProfile.findUnique({
+        where: { authUserId },
+      })
+      if (existing) return existing
+
+      const profile = await client.farmerProfile.create({
+        data: {
+          ownerName: input.ownerName ?? '',
+          phone: input.phone ?? '',
+          farmName: input.farmName ?? '',
+          province: input.province ?? '',
+          district: input.district ?? '',
+          address: input.address ?? '',
+          consent: input.consent ?? false,
+          workflowStatus: 'deed_captured',
+          authUserId,
+        },
+      })
+      await client.workflowEvent.create({
+        data: {
+          farmerId: profile.id,
+          status: 'deed_captured',
+          label: 'Farmer profile created via auth bootstrap',
+          metadata: { source: 'api' },
+        },
+      })
+      return profile
+    })
+    return mapProfile(row)
+  }
+
+  async createUploadedFile(input: Omit<UploadedFile, 'id' | 'createdAt' | 'uploadedAt'>): Promise<UploadedFile> {
+    const row = await this.prisma.uploadedFile.create({
+      data: {
+        farmerId: input.farmerId || null,
+        fileName: input.fileName,
+        fileType: input.fileType,
+        purpose: input.purpose,
+        storageProvider: input.storageProvider,
+        storageKey: input.storageKey || null,
+        bucket: input.bucket || null,
+        sizeBytes: input.sizeBytes || null,
+        uploadStatus: input.uploadStatus,
+      },
+    })
+    return mapUploadedFile(row)
+  }
+
+  async getUploadedFile(id: string): Promise<UploadedFile | null> {
+    const row = await this.prisma.uploadedFile.findUnique({
+      where: { id },
+    })
+    return row ? mapUploadedFile(row) : null
+  }
+
+  async updateUploadedFileStatus(id: string, status: 'pending' | 'uploaded' | 'failed' | 'deleted', sizeBytes?: number): Promise<UploadedFile | null> {
+    const data: any = { uploadStatus: status }
+    if (status === 'uploaded') {
+      data.uploadedAt = new Date()
+      if (sizeBytes !== undefined) {
+        data.sizeBytes = sizeBytes
+      }
+    }
+    const row = await this.prisma.uploadedFile.update({
+      where: { id },
+      data,
+    })
+    return mapUploadedFile(row)
+  }
+
+  async getLandDocument(id: string): Promise<LandDocument | null> {
+    const row = await this.prisma.landDocument.findUnique({
+      where: { id },
+    })
+    return row ? mapLandDocument(row) : null
+  }
+
+  async updateLandDocument(id: string, update: Partial<LandDocument>): Promise<LandDocument | null> {
+    const data: any = { ...update }
+    if (update.ocrResult !== undefined) {
+      data.ocrResult = update.ocrResult === null ? null : jsonValue(update.ocrResult)
+    }
+    if (update.boundaryGeojson !== undefined) {
+      data.boundaryGeojson = update.boundaryGeojson === null ? null : jsonValue(update.boundaryGeojson)
+    }
+    if (update.submittedAt) data.submittedAt = new Date(update.submittedAt)
+    if (update.completedAt) data.completedAt = new Date(update.completedAt)
+
+    const row = await this.prisma.landDocument.update({
+      where: { id },
+      data,
+    })
+    return mapLandDocument(row)
+  }
+
+  async createLandDocument(plotId: string, uploadedFileId: string): Promise<LandDocument> {
+    const row = await this.prisma.landDocument.create({
+      data: {
+        plotId,
+        uploadedFileId,
+        documentType: 'thai_land_title_deed',
+        ocrStatus: 'pending_upload',
+        boundaryStatus: 'pending_upload',
+      },
+    })
+    return mapLandDocument(row)
   }
 }

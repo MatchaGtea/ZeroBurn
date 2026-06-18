@@ -9,6 +9,34 @@ async function main() {
     throw new Error(`Unsupported REPOSITORY_MODE: ${repositoryMode}`)
   }
 
+  const authMode = process.env.AUTH_MODE ?? 'mock'
+  if (authMode !== 'mock' && authMode !== 'supabase') {
+    throw new Error(`Unsupported AUTH_MODE: ${authMode}`)
+  }
+  if (authMode === 'supabase') {
+    if (!process.env.SUPABASE_URL) throw new Error('SUPABASE_URL is required when AUTH_MODE=supabase')
+    if (!process.env.SUPABASE_ANON_KEY) throw new Error('SUPABASE_ANON_KEY is required when AUTH_MODE=supabase')
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY is required when AUTH_MODE=supabase')
+  }
+
+  const storageMode = process.env.STORAGE_MODE ?? 'mock'
+  if (storageMode !== 'mock' && storageMode !== 'supabase') {
+    throw new Error(`Unsupported STORAGE_MODE: ${storageMode}`)
+  }
+  if (storageMode === 'supabase') {
+    if (!process.env.SUPABASE_URL) throw new Error('SUPABASE_URL is required when STORAGE_MODE=supabase')
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY is required when STORAGE_MODE=supabase')
+  }
+
+  const landDeedAdapterMode = process.env.LAND_DEED_ADAPTER_MODE ?? 'mock'
+  if (landDeedAdapterMode !== 'mock' && landDeedAdapterMode !== 'http') {
+    throw new Error(`Unsupported LAND_DEED_ADAPTER_MODE: ${landDeedAdapterMode}`)
+  }
+  if (landDeedAdapterMode === 'http') {
+    if (!process.env.LAND_DEED_API_URL) throw new Error('LAND_DEED_API_URL is required when LAND_DEED_ADAPTER_MODE=http')
+    if (!process.env.LAND_DEED_API_KEY) throw new Error('LAND_DEED_API_KEY is required when LAND_DEED_ADAPTER_MODE=http')
+  }
+
   let disconnect = async () => {}
   let repository
 

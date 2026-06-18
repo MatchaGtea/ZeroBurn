@@ -9,6 +9,8 @@ import type {
   Verification,
   WorkflowSnapshot,
   WorkflowStatus,
+  UploadedFile,
+  LandDocument,
 } from './domain'
 
 export type Awaitable<T> = T | Promise<T>
@@ -22,25 +24,35 @@ export interface EvidenceInput {
   gps?: string
   externalRequestId?: string
   externalRawPayload?: unknown
+  uploadedFileId?: string
 }
 export interface PlotDocumentInput {
   fileName?: string
   externalRequestId?: string
   externalRawPayload?: unknown
+  uploadedFileId?: string
 }
 
 export interface Repository {
-  getAppData(): Awaitable<AppData>
-  setWorkflow(status: WorkflowStatus): Awaitable<WorkflowSnapshot>
-  updateProfile(input: ProfileUpdate): Awaitable<FarmerProfile>
-  createPlot(input: CreatePlotInput, document?: PlotDocumentInput): Awaitable<Plot>
-  confirmBoundary(plotId: string, boundaryLabel: string): Awaitable<Plot | undefined>
-  createPlanting(input: CreatePlantingInput): Awaitable<PlantingRecord>
-  createHarvest(input: CreateHarvestInput): Awaitable<HarvestRecord>
-  submitEvidence(plotId: string, notes: string, evidence?: EvidenceInput): Awaitable<Verification>
-  approveVerification(plotId: string): Awaitable<AppData>
-  createListing(input: CreateListingInput): Awaitable<MarketplaceListing>
-  markListing(status: 'listed' | 'sold'): Awaitable<AppData>
+  getAppData(farmerId: string): Awaitable<AppData>
+  setWorkflow(farmerId: string, status: WorkflowStatus): Awaitable<WorkflowSnapshot>
+  updateProfile(farmerId: string, input: ProfileUpdate): Awaitable<FarmerProfile>
+  createPlot(farmerId: string, input: CreatePlotInput, document?: PlotDocumentInput): Awaitable<Plot>
+  confirmBoundary(farmerId: string, plotId: string, boundaryLabel: string): Awaitable<Plot | undefined>
+  createPlanting(farmerId: string, input: CreatePlantingInput): Awaitable<PlantingRecord>
+  createHarvest(farmerId: string, input: CreateHarvestInput): Awaitable<HarvestRecord>
+  submitEvidence(farmerId: string, plotId: string, notes: string, evidence?: EvidenceInput): Awaitable<Verification>
+  approveVerification(farmerId: string, plotId: string): Awaitable<AppData>
+  createListing(farmerId: string, input: CreateListingInput): Awaitable<MarketplaceListing>
+  markListing(farmerId: string, status: 'listed' | 'sold'): Awaitable<AppData>
+  findProfileByAuthId(authUserId: string): Awaitable<FarmerProfile | undefined>
+  createProfileWithAuth(authUserId: string, input: ProfileUpdate): Awaitable<FarmerProfile>
+  createUploadedFile(input: Omit<UploadedFile, 'id' | 'createdAt' | 'uploadedAt'>): Awaitable<UploadedFile>
+  getUploadedFile(id: string): Awaitable<UploadedFile | null>
+  updateUploadedFileStatus(id: string, status: 'pending' | 'uploaded' | 'failed' | 'deleted', sizeBytes?: number): Awaitable<UploadedFile | null>
+  getLandDocument(id: string): Awaitable<LandDocument | null>
+  updateLandDocument(id: string, update: Partial<LandDocument>): Awaitable<LandDocument | null>
+  createLandDocument(plotId: string, uploadedFileId: string): Awaitable<LandDocument>
 }
 
 const stepOrder: WorkflowStatus[] = [
@@ -186,23 +198,35 @@ export function buildWorkflow(status: WorkflowStatus): WorkflowSnapshot {
 }
 
 export class MemoryRepository implements Repository {
-  private profile: FarmerProfile = {
-    id: 'farmer-somchai',
-    ownerName: 'สมชาย ใจดี',
-    phone: '08X-XXX-XXXX',
-    farmName: 'Somchai Farm',
-    province: 'นครสวรรค์',
-    district: 'ตาคลี',
-    address: 'หมู่ 4 ตาคลี นครสวรรค์',
-    consent: true,
-    workflowStatus: 'planting_recorded',
-  }
+  private profiles: FarmerProfile[] = [
+    {
+      id: 'farmer-somchai',
+      ownerName: 'สมชาย ใจดี',
+      phone: '08X-XXX-XXXX',
+      farmName: 'Somchai Farm',
+      province: 'นครสวรรค์',
+      district: 'ตาคลี',
+      address: 'หมู่ 4 ตาคลี นครสวรรค์',
+      consent: true,
+      workflowStatus: 'planting_recorded',
+      authUserId: 'somchai-auth-id',
+    }
+  ]
 
   private plots: Plot[] = [
     { id: 'plot-a', name: 'แปลง A', cropType: 'อ้อย', cropVariety: 'Khon Kaen 3', areaRai: 12, gps: '15.2762, 100.1344', status: 'verified', riskLevel: 'low', boundaryLabel: 'ยืนยันแล้ว', documentStatus: 'ตรวจแล้ว' },
     { id: 'plot-b', name: 'แปลง B', cropType: 'อ้อย', cropVariety: 'LK92-11', areaRai: 8, gps: '15.2827, 100.1210', status: 'pending', riskLevel: 'medium', boundaryLabel: 'รอข้อมูล', documentStatus: 'รอบันทึกเก็บเกี่ยว' },
     { id: 'plot-c', name: 'แปลง C', cropType: 'อ้อย', cropVariety: 'K88-92', areaRai: 15, gps: '15.2709, 100.1518', status: 'flagged', riskLevel: 'high', boundaryLabel: 'ต้องตรวจเพิ่ม', documentStatus: 'มีจุดเสี่ยง' },
   ]
+
+  private plotToFarmer = new Map<string, string>([
+    ['plot-a', 'farmer-somchai'],
+    ['plot-b', 'farmer-somchai'],
+    ['plot-c', 'farmer-somchai'],
+  ])
+
+  private uploadedFiles: UploadedFile[] = []
+  private landDocuments: LandDocument[] = []
 
   private plantingRecords: PlantingRecord[] = [
     { id: 'PLR-001', plotId: 'plot-a', season: '2025/26', plantingDate: '2025-06-12', cropType: 'อ้อย', cropVariety: 'Khon Kaen 3', photoFileName: 'field-a.jpg', notes: 'ปลูกตามร่องเดิม', status: 'complete' },
@@ -225,94 +249,247 @@ export class MemoryRepository implements Repository {
     { id: 'MKT-001', plotId: 'plot-a', harvestRecordId: 'HAR-001', tokenLotId: 'ZBT-2026-001', productName: 'อ้อยสดคุณภาพ', quantity: 35, unit: 'ton', price: 2400, buyerVisibility: 'public', status: 'draft' },
   ]
 
-  getAppData(): AppData {
-    const totalHarvestTons = this.harvestRecords.reduce((sum, record) => sum + (record.unit === 'ton' ? record.quantity : record.quantity / 1000), 0)
-    return {
-      profile: this.profile,
-      workflow: buildWorkflow(this.profile.workflowStatus),
-      summary: {
-        registeredPlots: this.plots.length,
-        verifiedPlots: this.plots.filter((plot) => plot.status === 'verified').length,
-        pendingReview: this.verifications.filter((item) => item.status === 'pending' || item.status === 'checking_burn').length,
-        tokenBalance: this.tokens.reduce((sum, token) => sum + token.tokenAmount, 0),
-        totalHarvestTons,
-        marketplaceStatus: this.listings.some((listing) => listing.status === 'listed') ? 'เปิดขายแล้ว' : 'รออนุมัติขาย',
-      },
-      plots: this.plots,
-      plantingRecords: this.plantingRecords,
-      harvestRecords: this.harvestRecords,
-      verifications: this.verifications,
-      tokens: this.tokens,
-      marketplaceListings: this.listings,
+  private requireOwnedPlot(farmerId: string, plotId: string) {
+    if (this.plotToFarmer.get(plotId) !== farmerId) {
+      throw Object.assign(new Error('Plot not found'), { status: 404 })
     }
   }
 
-  setWorkflow(status: WorkflowStatus) {
-    this.profile = { ...this.profile, workflowStatus: status }
-    return this.getAppData().workflow
+  getAppData(farmerId: string): AppData {
+    const profile = this.profiles.find((p) => p.id === farmerId)
+    if (!profile) {
+      throw Object.assign(new Error(`Farmer profile ${farmerId} not found`), { status: 404 })
+    }
+
+    const plots = this.plots.filter((p) => this.plotToFarmer.get(p.id) === farmerId)
+    const plantingRecords = this.plantingRecords.filter((r) => this.plotToFarmer.get(r.plotId) === farmerId)
+    const harvestRecords = this.harvestRecords.filter((r) => this.plotToFarmer.get(r.plotId) === farmerId)
+    const verifications = this.verifications.filter((v) => this.plotToFarmer.get(v.plotId) === farmerId)
+    const tokens = this.tokens.filter((t) => this.plotToFarmer.get(t.plotId) === farmerId)
+    const listings = this.listings.filter((l) => this.plotToFarmer.get(l.plotId) === farmerId)
+
+    const totalHarvestTons = harvestRecords.reduce((sum, record) => sum + (record.unit === 'ton' ? record.quantity : record.quantity / 1000), 0)
+    return {
+      profile,
+      workflow: buildWorkflow(profile.workflowStatus),
+      summary: {
+        registeredPlots: plots.length,
+        verifiedPlots: plots.filter((plot) => plot.status === 'verified').length,
+        pendingReview: verifications.filter((item) => item.status === 'pending' || item.status === 'checking_burn').length,
+        tokenBalance: tokens.reduce((sum, token) => sum + token.tokenAmount, 0),
+        totalHarvestTons,
+        marketplaceStatus: listings.some((listing) => listing.status === 'listed') ? 'เปิดขายแล้ว' : 'รออนุมัติขาย',
+      },
+      plots,
+      plantingRecords,
+      harvestRecords,
+      verifications,
+      tokens,
+      marketplaceListings: listings,
+    }
   }
 
-  updateProfile(input: Partial<FarmerProfile>) {
-    this.profile = { ...this.profile, ...input, workflowStatus: input.workflowStatus ?? 'deed_captured' }
-    return this.profile
+  setWorkflow(farmerId: string, status: WorkflowStatus) {
+    const profile = this.profiles.find((p) => p.id === farmerId)
+    if (!profile) {
+      throw Object.assign(new Error(`Farmer profile ${farmerId} not found`), { status: 404 })
+    }
+    profile.workflowStatus = status
+    return buildWorkflow(status)
   }
 
-  createPlot(input: Omit<Plot, 'id' | 'status' | 'riskLevel'>) {
-    const plot: Plot = { ...input, id: `plot-${Date.now()}`, status: 'pending', riskLevel: 'low' }
+  updateProfile(farmerId: string, input: Partial<FarmerProfile>) {
+    const profile = this.profiles.find((p) => p.id === farmerId)
+    if (!profile) {
+      throw Object.assign(new Error(`Farmer profile ${farmerId} not found`), { status: 404 })
+    }
+    Object.assign(profile, input)
+    profile.workflowStatus = input.workflowStatus ?? profile.workflowStatus
+    return profile
+  }
+
+  createPlot(farmerId: string, input: Omit<Plot, 'id' | 'status' | 'riskLevel'>, document?: PlotDocumentInput) {
+    const id = `plot-${Date.now()}`
+    const plot: Plot = {
+      ...input,
+      id,
+      status: 'pending',
+      riskLevel: 'low',
+      documentStatus: document?.uploadedFileId ? 'เอกสารอัปโหลดแล้ว' : input.documentStatus,
+    }
     this.plots = [plot, ...this.plots]
-    this.setWorkflow('deed_captured')
+    this.plotToFarmer.set(id, farmerId)
+    this.setWorkflow(farmerId, 'deed_captured')
     return plot
   }
 
-  confirmBoundary(plotId: string, boundaryLabel: string) {
-    const existing = this.plots.find((plot) => plot.id === plotId)
-    if (!existing) return undefined
-
+  confirmBoundary(farmerId: string, plotId: string, boundaryLabel: string) {
+    this.requireOwnedPlot(farmerId, plotId)
     this.plots = this.plots.map((plot) => plot.id === plotId ? { ...plot, boundaryLabel, status: 'pending' } : plot)
-    this.setWorkflow('boundary_confirmed')
+    this.setWorkflow(farmerId, 'boundary_confirmed')
     return this.plots.find((plot) => plot.id === plotId)
   }
 
-  createPlanting(input: Omit<PlantingRecord, 'id' | 'status'>) {
-    const record: PlantingRecord = { ...input, id: `PLR-${Date.now()}`, status: 'submitted' }
+  createPlanting(farmerId: string, input: CreatePlantingInput) {
+    this.requireOwnedPlot(farmerId, input.plotId)
+    const file = input.photoFileId ? this.getUploadedFile(input.photoFileId) : null
+    const photoFileName = file ? file.fileName : (input.photoFileName || 'planting-evidence.jpg')
+    const record: PlantingRecord = {
+      ...input,
+      photoFileName,
+      id: `PLR-${Date.now()}`,
+      status: 'submitted',
+    }
     this.plantingRecords = [record, ...this.plantingRecords]
-    this.setWorkflow('planting_recorded')
+    this.setWorkflow(farmerId, 'planting_recorded')
     return record
   }
 
-  createHarvest(input: Omit<HarvestRecord, 'id' | 'status' | 'traceabilityId'>) {
-    const record: HarvestRecord = { ...input, id: `HAR-${Date.now()}`, status: 'submitted', traceabilityId: `ZB-2026-${String(this.harvestRecords.length + 1).padStart(3, '0')}` }
+  createHarvest(farmerId: string, input: CreateHarvestInput) {
+    this.requireOwnedPlot(farmerId, input.plotId)
+    const file = input.photoFileId ? this.getUploadedFile(input.photoFileId) : null
+    const photoFileName = file ? file.fileName : (input.photoFileName || 'harvest-evidence.jpg')
+    const record: HarvestRecord = {
+      ...input,
+      photoFileName,
+      id: `HAR-${Date.now()}`,
+      status: 'submitted',
+      traceabilityId: `ZB-2026-${String(this.harvestRecords.length + 1).padStart(3, '0')}`,
+    }
     this.harvestRecords = [record, ...this.harvestRecords]
-    this.setWorkflow('harvest_recorded')
+    this.setWorkflow(farmerId, 'harvest_recorded')
     return record
   }
 
-  submitEvidence(plotId: string, notes: string) {
-    const verification: Verification = { id: `VER-${Date.now()}`, plotId, status: 'checking_burn', riskLevel: 'medium', issueSummary: notes, resultNotes: 'กำลังตรวจจาก mock adapter', evidenceCount: 1 }
+  submitEvidence(farmerId: string, plotId: string, notes: string, evidence?: EvidenceInput) {
+    this.requireOwnedPlot(farmerId, plotId)
+    const harvest = this.harvestRecords
+      .filter((r) => r.plotId === plotId)
+      .sort((a, b) => b.harvestDate.localeCompare(a.harvestDate))[0]
+
+    const verification: Verification = {
+      id: `VER-${Date.now()}`,
+      plotId,
+      harvestRecordId: harvest?.id,
+      status: 'checking_burn',
+      riskLevel: 'medium',
+      issueSummary: notes,
+      resultNotes: 'กำลังตรวจจาก mock adapter',
+      evidenceCount: evidence?.uploadedFileId ? 1 : 0,
+    }
     this.verifications = [verification, ...this.verifications]
-    this.setWorkflow('checking_burn')
+    this.setWorkflow(farmerId, 'checking_burn')
     return verification
   }
 
-  approveVerification(plotId: string) {
-    this.verifications = this.verifications.map((item, index) => index === 0 || item.plotId === plotId ? { ...item, status: 'approved', resultNotes: 'ผ่าน Zero-Burn ได้รับ 120 แต้ม' } : item)
+  approveVerification(farmerId: string, plotId: string) {
+    this.requireOwnedPlot(farmerId, plotId)
+    this.verifications = this.verifications.map((item) => item.plotId === plotId ? { ...item, status: 'approved', resultNotes: 'ผ่าน Zero-Burn ได้รับ 120 แต้ม' } : item)
     if (!this.tokens.some((token) => token.plotId === plotId && token.status === 'available')) {
       this.tokens = [{ id: `ZBT-${Date.now()}`, plotId, tokenAmount: 120, carbonSavedKg: 800, status: 'available', traceabilityId: `ZB-2026-${this.tokens.length + 1}` }, ...this.tokens]
     }
-    this.setWorkflow('token_available')
-    return this.getAppData()
+    this.setWorkflow(farmerId, 'token_available')
+    return this.getAppData(farmerId)
   }
 
-  createListing(input: Omit<MarketplaceListing, 'id' | 'status'>) {
+  createListing(farmerId: string, input: Omit<MarketplaceListing, 'id' | 'status'>) {
+    this.requireOwnedPlot(farmerId, input.plotId)
     const listing: MarketplaceListing = { ...input, id: `MKT-${Date.now()}`, status: 'pending_approval' }
     this.listings = [listing, ...this.listings]
-    this.setWorkflow('listing_pending')
+    this.setWorkflow(farmerId, 'listing_pending')
     return listing
   }
 
-  markListing(status: 'listed' | 'sold') {
-    this.listings = this.listings.map((listing, index) => index === 0 ? { ...listing, status } : listing)
-    this.setWorkflow(status)
-    return this.getAppData()
+  markListing(farmerId: string, status: 'listed' | 'sold') {
+    this.listings = this.listings.map((listing) => this.plotToFarmer.get(listing.plotId) === farmerId ? { ...listing, status } : listing)
+    this.setWorkflow(farmerId, status)
+    return this.getAppData(farmerId)
+  }
+
+  findProfileByAuthId(authUserId: string) {
+    return this.profiles.find((p) => p.authUserId === authUserId)
+  }
+
+  createProfileWithAuth(authUserId: string, input: ProfileUpdate) {
+    const existing = this.findProfileByAuthId(authUserId)
+    if (existing) return existing
+
+    const profile: FarmerProfile = {
+      id: `farmer-${Date.now()}`,
+      ownerName: input.ownerName ?? '',
+      phone: input.phone ?? '',
+      farmName: input.farmName ?? '',
+      province: input.province ?? '',
+      district: input.district ?? '',
+      address: input.address ?? '',
+      consent: input.consent ?? false,
+      workflowStatus: 'deed_captured',
+      authUserId,
+    }
+    this.profiles.push(profile)
+    return profile
+  }
+
+  createUploadedFile(input: Omit<UploadedFile, 'id' | 'createdAt' | 'uploadedAt'>) {
+    const id = `upload-${Date.now()}`
+    const file: UploadedFile = {
+      ...input,
+      id,
+      createdAt: new Date().toISOString(),
+      uploadedAt: undefined,
+    }
+    this.uploadedFiles.push(file)
+    return file
+  }
+
+  getUploadedFile(id: string) {
+    return this.uploadedFiles.find((f) => f.id === id) || null
+  }
+
+  updateUploadedFileStatus(id: string, status: 'pending' | 'uploaded' | 'failed' | 'deleted', sizeBytes?: number) {
+    const file = this.uploadedFiles.find((f) => f.id === id)
+    if (!file) return null
+    file.uploadStatus = status
+    if (status === 'uploaded') {
+      file.uploadedAt = new Date().toISOString()
+      if (sizeBytes !== undefined) file.sizeBytes = sizeBytes
+    }
+    return file
+  }
+
+  getLandDocument(id: string) {
+    return this.landDocuments.find((d) => d.id === id) || null
+  }
+
+  updateLandDocument(id: string, update: Partial<LandDocument>) {
+    const doc = this.landDocuments.find((d) => d.id === id)
+    if (!doc) return null
+    Object.assign(doc, update)
+    doc.updatedAt = new Date().toISOString()
+
+    if (update.ocrStatus) {
+      this.plots = this.plots.map((p) => p.id === doc.plotId ? { ...p, documentStatus: update.ocrStatus! } : p)
+    }
+    if (update.boundaryStatus) {
+      this.plots = this.plots.map((p) => p.id === doc.plotId ? { ...p, boundaryLabel: update.boundaryStatus! } : p)
+    }
+
+    return doc
+  }
+
+  createLandDocument(plotId: string, uploadedFileId: string) {
+    const id = `doc-${Date.now()}`
+    const doc: LandDocument = {
+      id,
+      plotId,
+      uploadedFileId,
+      documentType: 'thai_land_title_deed',
+      ocrStatus: 'pending_upload',
+      boundaryStatus: 'pending_upload',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    this.landDocuments.push(doc)
+    return doc
   }
 }

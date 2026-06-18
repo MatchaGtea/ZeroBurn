@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent, ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { Card, FormField, Pill, StatTile, TextAreaField } from './components/ui'
 import { fallbackAppData } from './data/mockData'
@@ -14,8 +14,9 @@ import type {
   Verification,
   VerificationStatus,
   WorkflowStatus,
+  FarmerProfile,
 } from './data/types'
-import { loadAppData, patchJson, postJson, refreshAppData, setWorkflowStatus } from './lib/api'
+import { patchJson, postJson, refreshAppData, setWorkflowStatus, clearAuthToken, bootstrapProfile, ApiResponseError, uploadFileToStorage } from './lib/api'
 
 type IconProps = { size?: number; strokeWidth?: number }
 
@@ -85,10 +86,10 @@ const navItems = [
 type AppActions = {
   submittingAction: AppActionName | null
   updateProfile: (input: Partial<AppData['profile']>) => Promise<boolean>
-  addPlot: (input: Omit<Plot, 'id' | 'status' | 'riskLevel'>) => Promise<boolean>
-  addPlanting: (input: Omit<PlantingRecord, 'id' | 'status'>) => Promise<boolean>
-  addHarvest: (input: Omit<HarvestRecord, 'id' | 'status' | 'traceabilityId'>) => Promise<boolean>
-  submitEvidence: (plotId: string, notes: string) => Promise<boolean>
+  addPlot: (input: Omit<Plot, 'id' | 'status' | 'riskLevel'> & { documentFileName: string; documentFile?: File }) => Promise<boolean>
+  addPlanting: (input: Omit<PlantingRecord, 'id' | 'status'> & { photoFile?: File }) => Promise<boolean>
+  addHarvest: (input: Omit<HarvestRecord, 'id' | 'status' | 'traceabilityId'> & { photoFile?: File }) => Promise<boolean>
+  submitEvidence: (plotId: string, notes: string, photoFileName: string, evidenceFile?: File) => Promise<boolean>
   approveVerification: (plotId: string) => Promise<boolean>
   rejectVerification: () => Promise<boolean>
   createListing: (input: Omit<MarketplaceListing, 'id' | 'status'>) => Promise<boolean>
@@ -107,17 +108,49 @@ function App() {
   const [feedback, setFeedback] = useState<MutationFeedback | null>(null)
   const mutationLock = useRef(false)
 
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('zeroburn_auth_token'))
+  const [profileStatus, setProfileStatus] = useState<'loading' | 'unauthenticated' | 'no_profile' | 'loaded'>('loading')
+
   useEffect(() => {
     let active = true
-    loadAppData().then((loadedData) => {
-      if (!active) return
-      setData(loadedData)
+    if (!token) {
+      setProfileStatus('unauthenticated')
       setIsLoading(false)
-    })
+      return
+    }
+
+    setProfileStatus('loading')
+    setIsLoading(true)
+
+    refreshAppData()
+      .then((loadedData) => {
+        if (!active) return
+        setData(loadedData)
+        setProfileStatus('loaded')
+        setIsLoading(false)
+      })
+      .catch((err) => {
+        if (!active) return
+        if (err instanceof ApiResponseError) {
+          if (err.status === 401) {
+            localStorage.removeItem('zeroburn_auth_token')
+            setToken(null)
+            setProfileStatus('unauthenticated')
+          } else if (err.status === 404) {
+            setProfileStatus('no_profile')
+          } else {
+            setProfileStatus('loaded')
+          }
+        } else {
+          setProfileStatus('loaded')
+        }
+        setIsLoading(false)
+      })
+
     return () => {
       active = false
     }
-  }, [])
+  }, [token])
 
   useEffect(() => {
     if (!feedback) return
@@ -158,20 +191,56 @@ function App() {
     },
     addPlot(input) {
       return runMutation('plot', 'บันทึกและยืนยันขอบเขตแปลงแล้ว', async () => {
-        const result = await postJson<{ plot: Plot }>('/plots', input)
+        let uploadedFileId: string | undefined
+        if (input.documentFile) {
+          uploadedFileId = await uploadFileToStorage(input.documentFile, 'land_deed')
+        }
+        const result = await postJson<{ plot: Plot }>('/plots', {
+          ...input,
+          uploadedFileId,
+        })
         await postJson(`/plots/${result.plot.id}/confirm-boundary`, {
           boundaryLabel: 'ยืนยันขอบเขตแล้ว',
         })
       })
     },
     addPlanting(input) {
-      return runMutation('planting', 'บันทึกวันปลูกแล้ว', () => postJson('/records/planting', input))
+      return runMutation('planting', 'บันทึกวันปลูกแล้ว', async () => {
+        let photoFileId: string | undefined
+        if (input.photoFile) {
+          photoFileId = await uploadFileToStorage(input.photoFile, 'farm_record')
+        }
+        await postJson('/records/planting', {
+          ...input,
+          photoFileId,
+        })
+      })
     },
     addHarvest(input) {
-      return runMutation('harvest', 'บันทึกการเก็บเกี่ยวแล้ว', () => postJson('/records/harvest', input))
+      return runMutation('harvest', 'บันทึกการเก็บเกี่ยวแล้ว', async () => {
+        let photoFileId: string | undefined
+        if (input.photoFile) {
+          photoFileId = await uploadFileToStorage(input.photoFile, 'farm_record')
+        }
+        await postJson('/records/harvest', {
+          ...input,
+          photoFileId,
+        })
+      })
     },
-    submitEvidence(plotId, notes) {
-      return runMutation('evidence', 'ส่งหลักฐานแล้ว', () => postJson('/verifications/evidence', { plotId, notes, photoFileName: 'residue-evidence.jpg' }))
+    submitEvidence(plotId, notes, photoFileName, evidenceFile) {
+      return runMutation('evidence', 'ส่งหลักฐานแล้ว', async () => {
+        let uploadedFileId: string | undefined
+        if (evidenceFile) {
+          uploadedFileId = await uploadFileToStorage(evidenceFile, 'evidence')
+        }
+        await postJson('/verifications/evidence', {
+          plotId,
+          notes,
+          photoFileName,
+          uploadedFileId,
+        })
+      })
     },
     approveVerification(plotId) {
       return runMutation('approve', 'อนุมัติและรับแต้มแล้ว', () => postJson(`/verifications/${plotId}/mock-approve`, {}))
@@ -192,6 +261,44 @@ function App() {
       return runMutation('workflow', 'อัปเดตขั้นตอนแล้ว', () => setWorkflowStatus(status))
     },
   }), [runMutation, submittingAction])
+
+  const handleLogin = (newToken: string) => {
+    localStorage.setItem('zeroburn_auth_token', newToken)
+    setToken(newToken)
+  }
+
+  const handleRegister = async (profileInput: Partial<FarmerProfile>) => {
+    await bootstrapProfile(profileInput)
+    const freshData = await refreshAppData()
+    setData(freshData)
+    setProfileStatus('loaded')
+  }
+
+  const handleLogout = () => {
+    clearAuthToken()
+    setToken(null)
+    setProfileStatus('unauthenticated')
+  }
+
+  if (profileStatus === 'loading') {
+    return (
+      <div className="app-canvas">
+        <div className="phone-shell">
+          <div className="centered-content">
+            <p style={{ color: 'var(--muted)', fontWeight: 800 }}>กำลังโหลดข้อมูล...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (profileStatus === 'unauthenticated') {
+    return <LoginScreen onLogin={handleLogin} />
+  }
+
+  if (profileStatus === 'no_profile') {
+    return <RegisterScreen onRegister={handleRegister} onLogout={handleLogout} />
+  }
 
   return (
     <div className="app-canvas">
@@ -342,6 +449,8 @@ function AddPlotPage({ data, actions }: { data: AppData; actions: AppActions }) 
       gps: getFormString(form, 'gps') || 'GPS จากเครื่อง',
       boundaryLabel: 'ระบบช่วยลากขอบเขตให้แล้ว',
       documentStatus: 'มีรูปเอกสารพื้นที่',
+      documentFileName: getFormFileName(form, 'documentPhoto'),
+      documentFile: getFormFile(form, 'documentPhoto'),
     })
     if (saved) navigate('/plots')
   }
@@ -355,7 +464,7 @@ function AddPlotPage({ data, actions }: { data: AppData; actions: AppActions }) 
         <FormField label="พื้นที่ไร่" name="areaRai" type="number" defaultValue={10} required />
         <FormField label="พันธุ์อ้อย" name="cropVariety" defaultValue="LK92-11" />
         <FormField label="GPS / ที่ตั้ง" name="gps" defaultValue={data.plots[0]?.gps ?? 'นครสวรรค์'} />
-        <UploadBox title="รูปเอกสารพื้นที่" helper="โฉนดตัวอย่าง · ไม่เก็บข้อมูลจริงใน prototype" image={titleDeedImage} />
+        <UploadBox name="documentPhoto" title="รูปเอกสารพื้นที่" helper="ถ่ายรูปโฉนดหรือเอกสารพื้นที่ให้เห็นชัด" image={titleDeedImage} required />
         <MiniBoundary />
         <SubmitButton actions={actions} action="plot" label="บันทึกแปลง" />
       </form>
@@ -402,8 +511,9 @@ function PlantingPage({ data, actions }: { data: AppData; actions: AppActions })
       plantingDate: getFormString(form, 'plantingDate') || '2026-06-12',
       cropType: 'อ้อย',
       cropVariety: getFormString(form, 'cropVariety') || 'LK92-11',
-      photoFileName: 'planting-photo.jpg',
+      photoFileName: getFormFileName(form, 'plantingPhoto'),
       notes: getFormString(form, 'notes'),
+      photoFile: getFormFile(form, 'plantingPhoto'),
     })
     if (saved) navigate('/records/success')
   }
@@ -416,7 +526,7 @@ function PlantingPage({ data, actions }: { data: AppData; actions: AppActions })
         <FormField label="วันที่เริ่มปลูก" name="plantingDate" type="date" defaultValue="2026-06-12" required />
         <FormField label="ฤดูเพาะปลูก" name="season" defaultValue="2025/26" />
         <FormField label="พันธุ์อ้อย" name="cropVariety" defaultValue="LK92-11" />
-        <UploadBox title="รูปจากไร่" helper="รูปต้นอ้อยหรือพื้นที่ปลูก" image={sugarcaneImage} />
+        <UploadBox name="plantingPhoto" title="รูปจากไร่" helper="ถ่ายรูปต้นอ้อยหรือพื้นที่ปลูก" image={sugarcaneImage} required />
         <TextAreaField label="หมายเหตุ" name="notes" placeholder="เช่น ปลูกตามร่องเดิม" />
         <SubmitButton actions={actions} action="planting" label="บันทึกวันปลูก" />
       </form>
@@ -436,8 +546,9 @@ function HarvestPage({ data, actions }: { data: AppData; actions: AppActions }) 
       harvestDate: getFormString(form, 'harvestDate') || '2026-03-15',
       quantity: Number(form.get('quantity') || 0),
       unit: 'ton',
-      photoFileName: 'harvest-evidence.jpg',
+      photoFileName: getFormFileName(form, 'harvestPhoto'),
       notes: getFormString(form, 'notes'),
+      photoFile: getFormFile(form, 'harvestPhoto'),
     })
     if (saved) navigate('/status/evidence')
   }
@@ -450,7 +561,7 @@ function HarvestPage({ data, actions }: { data: AppData; actions: AppActions }) 
         <FormField label="วันที่เก็บเกี่ยว" name="harvestDate" type="date" defaultValue="2026-03-15" required />
         <FormField label="ปริมาณผลผลิต (ตัน)" name="quantity" type="number" defaultValue={35} required />
         <FormField label="ฤดูเพาะปลูก" name="season" defaultValue="2025/26" />
-        <UploadBox title="รูป harvest" helper="รูปมัดอ้อย รถบรรทุก หรือจุดชั่ง" image={harvestImage} />
+        <UploadBox name="harvestPhoto" title="รูปเก็บเกี่ยว" helper="ถ่ายรูปมัดอ้อย รถบรรทุก หรือจุดชั่ง" image={harvestImage} required />
         <TextAreaField label="หมายเหตุ" name="notes" placeholder="เช่น เก็บเกี่ยวสด ไม่เผา" />
         <SubmitButton actions={actions} action="harvest" label="ส่งตรวจ Zero-Burn" />
       </form>
@@ -499,6 +610,8 @@ function EvidencePage({ data, actions }: { data: AppData; actions: AppActions })
     const saved = await actions.submitEvidence(
       getFormString(form, 'plotId') || (data.plots[1]?.id ?? 'plot-b'),
       getFormString(form, 'notes') || 'ส่งหลักฐานการจัดการเศษซาก',
+      getFormFileName(form, 'evidencePhoto'),
+      getFormFile(form, 'evidencePhoto'),
     )
     if (saved) navigate('/status/result')
   }
@@ -512,7 +625,7 @@ function EvidencePage({ data, actions }: { data: AppData; actions: AppActions })
       </Card>
       <form className="form-grid" onSubmit={onSubmit}>
         <SelectPlot data={data} preferredId="plot-b" />
-        <UploadBox title="อัปโหลดรูปหลักฐาน" helper="รูปเศษซากอ้อยบนดิน หรือการคลุมดิน" image={residueImage} />
+        <UploadBox name="evidencePhoto" title="รูปหลักฐาน" helper="ถ่ายรูปเศษซากอ้อยบนดิน หรือการคลุมดิน" image={residueImage} required />
         <TextAreaField label="อธิบายเพิ่มเติม" name="notes" defaultValue="จัดการเศษซากโดยสับคลุมดิน ไม่มีการเผา" />
         <div className="auto-note"><MapPin size={16} /> วันที่/GPS บันทึกอัตโนมัติจากเครื่อง</div>
         <SubmitButton actions={actions} action="evidence" label="ส่งหลักฐานเพิ่ม" />
@@ -663,8 +776,17 @@ function SellStatusPage({ data, actions }: { data: AppData; actions: AppActions 
 
 function ProfilePage({ data }: { data: AppData }) {
   const navigate = useNavigate()
+  const initials = data.profile.ownerName
+    ? data.profile.ownerName.trim().substring(0, 2).toUpperCase()
+    : 'SF'
+
+  const handleSignOut = () => {
+    clearAuthToken()
+    window.location.reload()
+  }
+
   return (
-    <PageStack title="โปรไฟล์" action={<ProfileDot initials="SF" />}>
+    <PageStack title="โปรไฟล์" action={<ProfileDot initials={initials} />}>
       <GuideCard pose="welcome" label="เริ่มใช้งาน" title="ยืนยันข้อมูลไร่" text={data.profile.consent ? 'ข้อมูลพร้อมใช้งานแล้ว' : 'เพิ่มข้อมูลเจ้าของไร่ก่อนเริ่ม workflow'} cta="อัปเดตโปรไฟล์" onClick={() => navigate('/profile/edit')} />
       <ImageCard src={farmerMobileImage} title={data.profile.farmName} caption={`${data.profile.district} · ${data.profile.province}`} />
       <Card title="ข้อมูลไร่">
@@ -675,6 +797,9 @@ function ProfilePage({ data }: { data: AppData }) {
           ['เอกสารพื้นที่', 'โฉนดตัวอย่าง · ไม่มีข้อมูลจริง'],
         ]} />
       </Card>
+      <button className="ghost-button full" onClick={handleSignOut} style={{ color: 'var(--red)', borderColor: 'rgba(217, 74, 83, 0.3)' }}>
+        ออกจากระบบ
+      </button>
     </PageStack>
   )
 }
@@ -707,7 +832,7 @@ function ProfileEditPage({ data, actions }: { data: AppData; actions: AppActions
         <FormField label="จังหวัด" name="province" defaultValue={data.profile.province} required />
         <FormField label="อำเภอ" name="district" defaultValue={data.profile.district} required />
         <FormField label="ที่ตั้งไร่" name="address" defaultValue={data.profile.address} />
-        <UploadBox title="เอกสารพื้นที่" helper="ใช้รูปโฉนดตัวอย่างใน prototype" image={titleDeedImage} />
+        <div className="auto-note profile-next-step"><MapPin size={17} /> หลังบันทึกโปรไฟล์ ระบบจะพาไปถ่ายรูปโฉนดในขั้นตอนเพิ่มแปลง</div>
         <label className="consent-row"><input type="checkbox" defaultChecked /> ยินยอมให้ใช้ข้อมูลเพื่อประเมิน Zero-Burn</label>
         <SubmitButton actions={actions} action="profile" label="บันทึกโปรไฟล์" />
       </form>
@@ -784,17 +909,44 @@ function ImageCard({ src, title, caption }: { src: string; title: string; captio
   )
 }
 
-function UploadBox({ title, helper, image }: { title: string; helper: string; image: string }) {
+function UploadBox({ name, title, helper, image, required = false }: { name: string; title: string; helper: string; image: string; required?: boolean }) {
+  const inputId = useId()
+  const helperId = `${inputId}-helper`
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [fileName, setFileName] = useState('')
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
+
+  function onChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0]
+    setFileName(file?.name ?? '')
+    setPreviewUrl(file ? URL.createObjectURL(file) : null)
+  }
+
   return (
-    <div className="upload-box">
-      <img src={image} alt="" />
-      <div>
+    <label className={`upload-box ${fileName ? 'has-file' : ''}`} htmlFor={inputId}>
+      <img src={previewUrl ?? image} alt={fileName ? `ตัวอย่างภาพ ${fileName}` : ''} />
+      <div className="upload-copy">
         <Upload size={18} />
         <strong>{title}</strong>
-        <span>{helper}</span>
+        <span id={helperId}>{fileName ? `เลือกแล้ว: ${fileName}` : helper}</span>
+        <span className="upload-action">{fileName ? 'แตะเพื่อเปลี่ยนรูป' : 'แตะเพื่อถ่ายรูปหรือเลือกรูป'}</span>
       </div>
-      <input type="file" aria-label={title} />
-    </div>
+      <input
+        id={inputId}
+        name={name}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        required={required}
+        aria-describedby={helperId}
+        onChange={onChange}
+      />
+    </label>
   )
 }
 
@@ -1010,6 +1162,147 @@ function plotName(data: AppData, plotId: string) {
 function getFormString(form: FormData, name: string) {
   const value = form.get(name)
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function getFormFileName(form: FormData, name: string) {
+  const value = form.get(name)
+  return value instanceof File ? value.name : ''
+}
+
+function getFormFile(form: FormData, name: string): File | undefined {
+  const value = form.get(name)
+  return value instanceof File && value.size > 0 ? value : undefined
+}
+
+function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
+  const [farmerName, setFarmerName] = useState('somchai')
+  const [customToken, setCustomToken] = useState('')
+  const [isSupabase, setIsSupabase] = useState(false)
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    if (isSupabase) {
+      if (!customToken) return
+      onLogin(customToken)
+    } else {
+      onLogin(`mock-token-${farmerName.trim().toLowerCase()}`)
+    }
+  }
+
+  return (
+    <div className="app-canvas">
+      <div className="phone-shell login-shell">
+        <header className="top-bar" style={{ justifyContent: 'center' }}>
+          <strong>ZeroBurn Farmer</strong>
+        </header>
+        <main className="screen-scroll centered-content">
+          <div className="login-card">
+            <div className="mascot-frame login-mascot">
+              <img src={mascotWelcome} alt="ยินดีต้อนรับ" />
+            </div>
+            <h2>เข้าสู่ระบบ ZeroBurn</h2>
+            <p className="login-subtitle">ระบบรับรองผลผลิตไม่เผาและขายพร้อมแต้มคาร์บอน</p>
+
+            <form onSubmit={handleSubmit} className="form-grid" style={{ width: '100%' }}>
+              <div className="tabs segmented" style={{ gridColumn: '1 / -1' }}>
+                <button type="button" className={!isSupabase ? 'active' : ''} onClick={() => setIsSupabase(false)}>Mock Login</button>
+                <button type="button" className={isSupabase ? 'active' : ''} onClick={() => setIsSupabase(true)}>Supabase Token</button>
+              </div>
+
+              {!isSupabase ? (
+                <label className="form-field" style={{ gridColumn: '1 / -1' }}>
+                  <span>เลือกเกษตรกรจำลอง</span>
+                  <select value={farmerName} onChange={(e) => setFarmerName(e.target.value)}>
+                    <option value="somchai">สมชาย สุขใจ (มีข้อมูลแล้ว)</option>
+                    <option value="somsri">สมศรี รักเกษตร (สร้างใหม่)</option>
+                    <option value="anon">เกษตรกรทั่วไป (สร้างใหม่)</option>
+                  </select>
+                </label>
+              ) : (
+                <label className="form-field" style={{ gridColumn: '1 / -1' }}>
+                  <span>Supabase Access Token (JWT)</span>
+                  <input
+                    name="supabaseToken"
+                    type="text"
+                    placeholder="ใส่ JWT Token จาก Supabase"
+                    value={customToken}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setCustomToken(e.target.value)}
+                    required
+                  />
+                </label>
+              )}
+
+              <button type="submit" className="primary-button full form-submit">
+                เข้าสู่ระบบ
+              </button>
+            </form>
+          </div>
+        </main>
+      </div>
+    </div>
+  )
+}
+
+function RegisterScreen({ onRegister, onLogout }: { onRegister: (profile: Partial<FarmerProfile>) => Promise<void>; onLogout: () => void }) {
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSubmitting(true)
+    setError(null)
+    const form = new FormData(event.currentTarget)
+    try {
+      await onRegister({
+        ownerName: getFormString(form, 'ownerName'),
+        phone: getFormString(form, 'phone'),
+        farmName: getFormString(form, 'farmName'),
+        province: getFormString(form, 'province'),
+        district: getFormString(form, 'district'),
+        address: getFormString(form, 'address'),
+        consent: true,
+      })
+    } catch (err: any) {
+      setError(err?.message ?? 'ลงทะเบียนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="app-canvas">
+      <div className="phone-shell">
+        <header className="top-bar" style={{ justifyContent: 'center' }}>
+          <strong>ลงทะเบียนเกษตรกรใหม่</strong>
+        </header>
+        <main className="screen-scroll">
+          <div className="guide-media">
+            <img className="guide-photo" src={farmerMobileImage} alt="" />
+            <div className="guide-bubble">
+              <img src={mascotWelcome} alt="" />
+              <p>ยินดีต้อนรับ! กรอกข้อมูลส่วนตัวเพื่อสร้างบัญชีเกษตรกรเพื่อใช้งานระบบ</p>
+            </div>
+          </div>
+          {error && <div className="mutation-notice mutation-notice-error">{error}</div>}
+          <form className="form-grid pad-all" onSubmit={handleSubmit}>
+            <FormField label="ชื่อเจ้าของไร่" name="ownerName" placeholder="เช่น สมชาย สุขใจ" required />
+            <FormField label="เบอร์โทร" name="phone" placeholder="เช่น 0812345678" required />
+            <FormField label="ชื่อไร่" name="farmName" placeholder="เช่น ไร่มะขามหวาน" required />
+            <FormField label="จังหวัด" name="province" placeholder="เช่น นครสวรรค์" required />
+            <FormField label="อำเภอ" name="district" placeholder="เช่น เมืองนครสวรรค์" required />
+            <FormField label="ที่ตั้งไร่ / ที่อยู่" name="address" placeholder="เช่น 12/3 หมู่ 4 ต.ปากน้ำโพ" />
+            <label className="consent-row" style={{ gridColumn: '1 / -1' }}><input type="checkbox" required defaultChecked /> ยินยอมให้ใช้ข้อมูลเพื่อประเมิน Zero-Burn</label>
+            <button className="primary-button form-submit" type="submit" disabled={submitting}>
+              {submitting ? 'กำลังลงทะเบียน...' : 'ลงทะเบียนและเริ่มใช้งาน'}
+            </button>
+            <button className="ghost-button full" type="button" onClick={onLogout} style={{ marginTop: '0.5rem', gridColumn: '1 / -1' }}>
+              ออกจากระบบ / สลับบัญชี
+            </button>
+          </form>
+        </main>
+      </div>
+    </div>
+  )
 }
 
 export default App
