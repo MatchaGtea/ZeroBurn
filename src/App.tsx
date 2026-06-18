@@ -119,6 +119,12 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!feedback) return
+    const timeoutId = window.setTimeout(() => setFeedback(null), 4500)
+    return () => window.clearTimeout(timeoutId)
+  }, [feedback])
+
   const runMutation = useCallback(async (
     action: AppActionName,
     successMessage: string,
@@ -151,7 +157,12 @@ function App() {
       return runMutation('profile', 'บันทึกโปรไฟล์แล้ว', () => patchJson('/profile', input))
     },
     addPlot(input) {
-      return runMutation('plot', 'บันทึกแปลงแล้ว', () => postJson('/plots', input))
+      return runMutation('plot', 'บันทึกและยืนยันขอบเขตแปลงแล้ว', async () => {
+        const result = await postJson<{ plot: Plot }>('/plots', input)
+        await postJson(`/plots/${result.plot.id}/confirm-boundary`, {
+          boundaryLabel: 'ยืนยันขอบเขตแล้ว',
+        })
+      })
     },
     addPlanting(input) {
       return runMutation('planting', 'บันทึกวันปลูกแล้ว', () => postJson('/records/planting', input))

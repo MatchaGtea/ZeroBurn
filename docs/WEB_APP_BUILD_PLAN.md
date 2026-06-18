@@ -3,15 +3,15 @@
 ## Progress
 
 - Status: In Progress
-- Last updated: 2026-06-18 02:14 +07
-- Current owner: Codex (handoff-ready checkpoint)
-- Next task: Add automated API tests, then run Postgres migration/seed against local Docker
+- Last updated: 2026-06-18 17:04 +07
+- Current owner: Codex (GPT-5.5 Medium workers reviewed by Codex)
+- Next task: Select auth and file-storage providers, then replace the first mock external adapter with its real API contract
 
 ## Current Checkpoint
 
-Step 3 is complete: the old desktop dashboard frontend has been replaced with a mobile-first ZeroBurn Farmer web app that follows the Figma UX V3 flow. The app has 6 bottom tabs, full-screen destination routes, Thai farmer-friendly wording, real farm photos, contextual mascot poses, workflow-driven Next Action, and local mock submit state that advances the workflow. Tooling is stable again after reinstalling dependencies and updating Prisma 7 config.
+Step 4 is complete: the mobile UX is connected to the Express API with real async submit/error feedback, and the API now supports both in-memory and Postgres repositories. Postgres migration, idempotent seed, repository integrity checks, and an end-to-end workflow from plot creation through sold listing have passed against a local Prisma database. GitHub Pages keeps a LocalStorage fallback because it has no hosted API yet.
 
-Important tooling note: `antigravity-ide chat --mode agent` was attempted twice from CLI, but it opened/queued chat in the IDE without applying file changes or returning agent output. Codex implemented the Step 3 frontend directly and reviewed it.
+Implementation tasks in this checkpoint were delegated to GPT-5.5 Medium workers. Codex reviewed their diffs, returned corrections for strict server typechecking and repository integrity, then independently reran automated, database, API, and browser checks.
 
 ## Product Goal
 
@@ -24,7 +24,8 @@ Build the farmer-facing ZeroBurn mobile web app from the Figma `Prototype / Zero
 - Frontend: React + Vite + TypeScript. Keep this because the repo already uses it and it is fast for mobile web prototypes.
 - Backend: Node.js + Express + TypeScript. Use controllers/services/repositories/adapters so external APIs can be swapped in later.
 - Database: Postgres + Prisma. Use relational tables for farmers, plots, records, verification, token, listings, uploads, and workflow events.
-- Prototype mode: API uses an in-memory repository by default so the app works without a running DB. Prisma schema and Docker Postgres are included for migration work.
+- Runtime modes: API uses an in-memory repository by default and switches to Prisma/Postgres with `REPOSITORY_MODE=postgres`.
+- Static Pages mode: LocalStorage provides the same prototype workflow when no hosted API is reachable.
 
 ## Frontend Plan
 
@@ -92,6 +93,8 @@ The app derives dashboard Next Action from workflow state and latest records, no
 - [x] Rebuild app shell to mobile-first UX
 - [x] Add contextual mascot/photo assets
 - [x] Add workflow forms and mock submit states
+- [x] Connect form submissions to API responses and refresh server state
+- [x] Add submitting, double-submit prevention, success, and error feedback
 - [x] Browser QA against Figma at 390x844 and 430x932
 
 ### Backend
@@ -100,14 +103,16 @@ The app derives dashboard Next Action from workflow state and latest records, no
 - [x] Add `/api/v1` routes
 - [x] Add validation and in-memory repository
 - [x] Add external adapter interfaces/mocks
-- [ ] Add automated API tests
+- [x] Add Prisma/Postgres repository mode
+- [x] Add automated API tests
 
 ### Database
 
 - [x] Add Prisma schema
 - [x] Add Docker Postgres config
 - [x] Add seed script
-- [ ] Run migration against local Postgres
+- [x] Add initial migration with foreign-key/query indexes
+- [x] Run migration and idempotent seed against local Postgres
 
 ### API Integrations
 
@@ -125,7 +130,10 @@ The app derives dashboard Next Action from workflow state and latest records, no
 - [x] `npm run dev` smoke check
 - [x] API smoke test core workflow endpoints
 - [x] Mobile viewport visual QA
-- [ ] Add automated API tests
+- [x] Automated API tests: 10 passing
+- [x] Postgres full-workflow smoke test: plot -> planting -> harvest -> evidence -> token -> listing -> sold
+- [x] Browser interaction QA for listing and plot-confirmation flows
+- [x] GitHub Pages deployment workflow
 
 ## Progress Log
 
@@ -136,11 +144,15 @@ The app derives dashboard Next Action from workflow state and latest records, no
 - 2026-06-18: Verified `npm run typecheck` and `npm run build`. Production preview QA passed at 390x844, 430x932, and 900x920 centered desktop layout. Tested Next Action -> evidence form -> result -> sell and Next Action -> sell form routes in browser.
 - 2026-06-18: Re-ran `npm ci` after disk cleanup, fixed the remaining ESLint issue in `server/index.ts`, added Prisma 7 `prisma.config.ts` dotenv loading, and verified `npm run lint`, `npm run typecheck`, `npm run build`, `npx prisma validate`, and API smoke checks.
 - 2026-06-18: Verified `npm run dev` starts both Vite at `/ZeroBurn/` and the Express API at `/api/v1`; stopped the dev session after smoke checks.
+- 2026-06-18: Added Node test-runner API coverage, strict server TypeScript config, Express app dependency injection, and validation/error-path tests.
+- 2026-06-18: Added indexed Prisma migration, Decimal marketplace pricing, Prisma 7 PostgreSQL adapter, and idempotent Somchai Farm seed data. Applied the migration and ran the seed twice against a local Prisma Postgres server.
+- 2026-06-18: Added a Prisma repository implementing all core endpoints, ownership/integrity validation, graceful shutdown, and memory/Postgres runtime selection.
+- 2026-06-18: Connected frontend mutations to backend responses, added submit/error feedback, fixed plot boundary confirmation, and verified mobile sell and plot workflows in the in-app browser.
 
 ## Open Issues
 
 - Real auth provider is not selected yet.
 - Real file storage provider is not selected yet.
 - Real external API contracts are not available yet.
-- Postgres migration should be run after Docker is available locally.
-- API tests should be added for validation errors, missing IDs, and mock adapter failure paths.
+- GitHub Pages currently uses LocalStorage fallback; a hosted API/database deployment target is not selected yet.
+- Prisma CLI currently reports moderate advisories in its dev-only dependency chain; the available automated fix is an incompatible Prisma downgrade.

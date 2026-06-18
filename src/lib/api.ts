@@ -12,8 +12,11 @@ import type {
 } from '../data/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:4184/api/v1'
+const USE_LOCAL_DATA = import.meta.env.PROD && !import.meta.env.VITE_API_BASE
 
 type ApiEnvelope<T> = { data: T }
+
+class ApiResponseError extends Error {}
 
 // LocalStorage Mock system
 const LS_KEY = 'zeroburn_app_data'
@@ -187,7 +190,7 @@ function localSetWorkflow(status: WorkflowStatus): WorkflowSnapshot {
   return data.workflow
 }
 
-let useMockFallback = false
+let useMockFallback = USE_LOCAL_DATA
 
 function handleMockRequest<T>(path: string, init?: RequestInit): T {
   const body = init?.body ? JSON.parse(init.body as string) : undefined
@@ -291,11 +294,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     })
     if (!response.ok) {
       const errorBody = await response.json().catch(() => null) as { error?: string } | null
-      throw new Error(errorBody?.error ?? `${response.status} ${response.statusText}`)
+      throw new ApiResponseError(errorBody?.error ?? `${response.status} ${response.statusText}`)
     }
     const json = (await response.json()) as ApiEnvelope<T> | T
     return 'data' in (json as ApiEnvelope<T>) ? (json as ApiEnvelope<T>).data : (json as T)
   } catch (err) {
+    if (err instanceof ApiResponseError) {
+      throw err
+    }
     console.warn(`API request to ${path} failed, falling back to LocalStorage mock.`, err)
     useMockFallback = true
     return handleMockRequest<T>(path, init)
@@ -325,4 +331,3 @@ export function patchJson<T>(path: string, body: unknown): Promise<T> {
 export function setWorkflowStatus(status: string): Promise<WorkflowSnapshot> {
   return postJson<WorkflowSnapshot>('/workflow/mock-status', { status })
 }
-
