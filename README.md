@@ -1,73 +1,57 @@
-# React + TypeScript + Vite
+# ZeroBurn Farmer Mobile Web App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Mobile-first farmer web app prototype rebuilt from the Figma `Prototype / ZeroBurn Farmer Mobile UX v3` design.
 
-Currently, two official plugins are available:
+The app focuses on the real farmer workflow:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+`ลงทะเบียน -> โฉนด -> ขอบเขตแปลง -> ปลูก -> เก็บเกี่ยว -> หลักฐานไม่เผา -> ตรวจ -> ได้แต้ม -> ลงขาย`
 
-## React Compiler
+## Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Frontend: React + Vite + TypeScript
+- Backend: Node.js + Express + TypeScript
+- Database: Postgres + Prisma
+- Runtime modes: in-memory repository by default, Postgres with `REPOSITORY_MODE=postgres`
+- External integrations: deterministic mock adapters until real API contracts are available
 
-## Expanding the ESLint configuration
+## Commands
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
+npm test
+npm run typecheck
+npm run lint
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+For local Postgres with Docker:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+docker compose up -d postgres
+npm run db:generate
+npm run db:migrate:deploy
+npm run db:seed
 ```
+
+If Docker is unavailable, Prisma can start a lightweight local database:
+
+```bash
+npm run db:local:start
+npx prisma dev ls
+```
+
+Copy the displayed TCP URL into `DATABASE_URL` in `.env`, set
+`REPOSITORY_MODE=postgres`, then run:
+
+```bash
+npm run db:migrate:deploy
+npm run db:seed
+npm run dev
+```
+
+Stop the lightweight database with `npm run db:local:stop`.
+
+## Handoff
+
+See [docs/WEB_APP_BUILD_PLAN.md](docs/WEB_APP_BUILD_PLAN.md) for current progress, architecture, routes, API plan, database plan, and continuation notes.

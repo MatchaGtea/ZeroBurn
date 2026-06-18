@@ -6,20 +6,31 @@
   "scripts": {
     "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
     "dev:web": "vite",
-    "dev:api": "node server/index.js",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "dev:api": "tsx server/index.ts",
+    "test": "tsx --test server/*.test.ts",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "build": "npm run typecheck && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "api": "node server/index.js"
+    "api": "tsx server/index.ts",
+    "db:generate": "prisma generate",
+    "db:local:start": "prisma dev --detach --name zeroburn",
+    "db:local:stop": "prisma dev stop zeroburn",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "lucide-react": "^1.18.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^7.17.0"
+    "react-router-dom": "^7.17.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -35,10 +46,11 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "prisma": "^7.8.0",
     "tailwindcss": "^4.3.1",
     "tsx": "^4.22.4",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.59.2",
-    "vite": "^7.2.7"
+    "vite": "^7.3.5"
   }
 }

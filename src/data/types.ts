@@ -1,8 +1,34 @@
-export type PlotStatus = 'verified' | 'pending' | 'flagged' | 'rejected'
-export type RecordStatus = 'complete' | 'incomplete' | 'waiting-review' | 'draft' | 'submitted' | 'linked' | 'listed'
-export type VerificationStatus = 'pending' | 'monitoring' | 'verified' | 'flagged' | 'rejected'
-export type TokenStatus = 'available' | 'sold' | 'pending' | 'linked'
-export type ListingStatus = 'active' | 'draft' | 'offer' | 'sold'
+export type WorkflowStatus =
+  | 'registration'
+  | 'deed_captured'
+  | 'boundary_confirmed'
+  | 'planting_recorded'
+  | 'harvest_recorded'
+  | 'evidence_submitted'
+  | 'checking_burn'
+  | 'approved'
+  | 'rejected'
+  | 'token_available'
+  | 'listing_pending'
+  | 'listed'
+  | 'sold'
+
+export type MascotPose = 'welcome' | 'map' | 'mobile' | 'harvest' | 'residue' | 'sell' | 'approved' | 'titleDeed'
+export type PlotStatus = 'draft' | 'pending' | 'verified' | 'flagged' | 'rejected'
+export type VerificationStatus = 'pending' | 'checking_burn' | 'needs_more_evidence' | 'approved' | 'rejected'
+export type ListingStatus = 'draft' | 'pending_approval' | 'listed' | 'sold'
+
+export interface FarmerProfile {
+  id: string
+  ownerName: string
+  phone: string
+  farmName: string
+  province: string
+  district: string
+  address: string
+  consent: boolean
+  workflowStatus: WorkflowStatus
+}
 
 export interface Plot {
   id: string
@@ -11,32 +37,22 @@ export interface Plot {
   cropVariety: string
   areaRai: number
   gps: string
-  province: string
-  district: string
-  owner: string
-  plantingDate: string
-  expectedHarvestDate: string
-  actualHarvestDate: string
-  harvestQuantity: string
   status: PlotStatus
-  tokenLotId: string
-  productLotId: string
-  certificateId: string
-  riskLevel: 'Low' | 'Medium' | 'High'
-  polygon: string
+  riskLevel: 'low' | 'medium' | 'high'
+  boundaryLabel: string
+  documentStatus: string
 }
 
 export interface PlantingRecord {
   id: string
   plotId: string
   season: string
+  plantingDate: string
   cropType: string
   cropVariety: string
-  plantingDate: string
-  plantingMethod: string
-  fertilizerInput: string
+  photoFileName: string
   notes: string
-  status: RecordStatus
+  status: 'draft' | 'submitted' | 'complete'
 }
 
 export interface HarvestRecord {
@@ -44,83 +60,77 @@ export interface HarvestRecord {
   plotId: string
   season: string
   harvestDate: string
-  productType: string
   quantity: number
   unit: 'kg' | 'ton'
-  grade: string
-  buyer: string
-  tokenLotId: string
-  status: RecordStatus
+  traceabilityId: string
+  photoFileName: string
+  notes: string
+  status: 'draft' | 'submitted' | 'linked'
 }
 
-export interface VerificationRecord {
+export interface Verification {
   id: string
   plotId: string
-  season: string
-  cropType: string
-  lastInspectionDate: string
-  detectionSource: 'Satellite' | 'Drone' | 'Field data'
-  riskLevel: 'Low' | 'Medium' | 'High'
+  harvestRecordId?: string
   status: VerificationStatus
-  notes: string
+  riskLevel: 'low' | 'medium' | 'high'
+  issueSummary: string
+  resultNotes: string
+  evidenceCount: number
 }
 
 export interface TokenLot {
   id: string
   plotId: string
-  season: string
-  harvestQuantity: string
+  harvestRecordId?: string
   tokenAmount: number
-  status: TokenStatus
-  linkedProductLot: string
+  carbonSavedKg: number
+  status: 'pending' | 'available' | 'attached' | 'sold'
   traceabilityId: string
 }
 
 export interface MarketplaceListing {
   id: string
-  productType: string
-  quantity: string
-  price: string
-  harvestDate: string
-  sourcePlotId: string
-  zeroBurnStatus: string
-  tokenAttached: boolean
-  buyerInterest: number
-  status: ListingStatus
-  mode: 'Produce Only' | 'Produce + Zero-Burn Token'
-}
-
-export interface Certificate {
-  id: string
-  farmerName: string
   plotId: string
-  productLot: string
-  tokenLot: string
-  verificationDate: string
-  status: string
-  traceabilityId: string
+  harvestRecordId: string
+  tokenLotId?: string
+  productName: string
+  quantity: number
+  unit: 'kg' | 'ton'
+  price: number
+  buyerVisibility: 'public' | 'approved_buyers'
+  status: ListingStatus
 }
 
-export interface FarmerProfile {
-  name: string
-  province: string
-  crop: string
-  phone: string
-  address: string
-  ownerInfo: string
-  paymentInfo: string
-  walletAddress: string
-  kycStatus: string
-  accountStatus: string
+export interface WorkflowSnapshot {
+  status: WorkflowStatus
+  nextAction: {
+    title: string
+    description: string
+    primaryLabel: string
+    primaryRoute: string
+    secondaryLabel?: string
+    secondaryRoute?: string
+    mascot: MascotPose
+  }
+  steps: Array<{ key: WorkflowStatus; label: string; done: boolean; current: boolean }>
 }
 
-export interface Summary {
-  registeredPlots: number
-  verifiedPlots: number
-  pendingReview: number
-  flaggedPlots: number
-  totalHarvest: string
-  tokenBalance: number
-  revenueProduce: string
-  revenueTokens: string
+export interface AppData {
+  profile: FarmerProfile
+  workflow: WorkflowSnapshot
+  summary: {
+    registeredPlots: number
+    verifiedPlots: number
+    pendingReview: number
+    tokenBalance: number
+    totalHarvestTons: number
+    marketplaceStatus: string
+  }
+  plots: Plot[]
+  plantingRecords: PlantingRecord[]
+  harvestRecords: HarvestRecord[]
+  verifications: Verification[]
+  tokens: TokenLot[]
+  marketplaceListings: MarketplaceListing[]
 }

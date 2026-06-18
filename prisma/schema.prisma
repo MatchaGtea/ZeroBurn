@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WorkflowStatus {
+  registration
+  deed_captured
+  boundary_confirmed
+  planting_recorded
+  harvest_recorded
+  evidence_submitted
+  checking_burn
+  approved
+  rejected
+  token_available
+  listing_pending
+  listed
+  sold
+}
+
+enum PlotStatus {
+  draft
+  pending
+  verified
+  flagged
+  rejected
+}
+
+enum RecordStatus {
+  draft
+  submitted
+  waiting_review
+  complete
+  linked
+}
+
+enum VerificationStatus {
+  pending
+  checking_burn
+  needs_more_evidence
+  approved
+  rejected
+}
+
+enum ListingStatus {
+  draft
+  pending_approval
+  listed
+  sold
+}
+
+model FarmerProfile {
+  id             String          @id @default(cuid())
+  ownerName      String
+  phone          String
+  farmName       String
+  province       String
+  district       String
+  address        String?
+  consent        Boolean         @default(false)
+  workflowStatus WorkflowStatus  @default(registration)
+  plots          Plot[]
+  uploads        UploadedFile[]
+  workflowEvents WorkflowEvent[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model Plot {
+  id              String               @id @default(cuid())
+  farmerId        String
+  farmer          FarmerProfile        @relation(fields: [farmerId], references: [id])
+  name            String
+  cropType        String
+  cropVariety     String?
+  areaRai         Float
+  province        String
+  district        String
+  gps             String?
+  boundaryGeojson Json?
+  status          PlotStatus           @default(pending)
+  riskLevel       String               @default("low")
+  landDocuments   LandDocument[]
+  plantingRecords PlantingRecord[]
+  harvestRecords  HarvestRecord[]
+  verifications   Verification[]
+  tokenLots       CarbonTokenLot[]
+  listings        MarketplaceListing[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([farmerId])
+  @@index([farmerId, status])
+}
+
+model LandDocument {
+  id                 String        @id @default(cuid())
+  plotId             String
+  plot               Plot          @relation(fields: [plotId], references: [id])
+  uploadedFileId     String?
+  uploadedFile       UploadedFile? @relation(fields: [uploadedFileId], references: [id])
+  documentType       String        @default("title_deed_mock")
+  ocrStatus          String        @default("mock_pending")
+  boundaryStatus     String        @default("mock_pending")
+  externalRequestId  String?
+  externalRawPayload Json?
+  createdAt          DateTime      @default(now())
+
+  @@index([plotId])
+  @@index([uploadedFileId])
+}
+
+model PlantingRecord {
+  id           String        @id @default(cuid())
+  plotId       String
+  plot         Plot          @relation(fields: [plotId], references: [id])
+  season       String
+  plantingDate DateTime
+  cropType     String
+  cropVariety  String?
+  photoFileId  String?
+  photoFile    UploadedFile? @relation(fields: [photoFileId], references: [id])
+  notes        String?
+  status       RecordStatus  @default(submitted)
+  createdAt    DateTime      @default(now())
+
+  @@index([plotId, plantingDate])
+  @@index([photoFileId])
+}
+
+model HarvestRecord {
+  id             String               @id @default(cuid())
+  plotId         String
+  plot           Plot                 @relation(fields: [plotId], references: [id])
+  season         String
+  harvestDate    DateTime
+  quantity       Float
+  unit           String               @default("ton")
+  traceabilityId String?              @unique
+  photoFileId    String?
+  photoFile      UploadedFile?        @relation(fields: [photoFileId], references: [id])
+  notes          String?
+  status         RecordStatus         @default(submitted)
+  verifications  Verification[]
+  tokenLots      CarbonTokenLot[]
+  listings       MarketplaceListing[]
+  createdAt      DateTime             @default(now())
+
+  @@index([plotId, harvestDate])
+  @@index([photoFileId])
+}
+
+model EvidenceSubmission {
+  id                 String        @id @default(cuid())
+  verificationId     String
+  verification       Verification  @relation(fields: [verificationId], references: [id])
+  uploadedFileId     String?
+  uploadedFile       UploadedFile? @relation(fields: [uploadedFileId], references: [id])
+  description        String?
+  gps                String?
+  capturedAt         DateTime?
+  externalRequestId  String?
+  externalRawPayload Json?
+  createdAt          DateTime      @default(now())
+
+  @@index([verificationId])
+  @@index([uploadedFileId])
+}
+
+model Verification {
+  id                String               @id @default(cuid())
+  plotId            String
+  plot              Plot                 @relation(fields: [plotId], references: [id])
+  harvestRecordId   String?
+  harvestRecord     HarvestRecord?       @relation(fields: [harvestRecordId], references: [id])
+  status            VerificationStatus   @default(pending)
+  riskLevel         String               @default("medium")
+  issueSummary      String?
+  resultNotes       String?
+  detectionSource   String               @default("mock_adapter")
+  externalRequestId String?
+  checkedAt         DateTime?
+  evidence          EvidenceSubmission[]
+  tokenLots         CarbonTokenLot[]
+  createdAt         DateTime             @default(now())
+
+  @@index([plotId, status])
+  @@index([harvestRecordId])
+}
+
+model CarbonTokenLot {
+  id              String               @id @default(cuid())
+  plotId          String
+  plot            Plot                 @relation(fields: [plotId], references: [id])
+  harvestRecordId String?
+  harvestRecord   HarvestRecord?       @relation(fields: [harvestRecordId], references: [id])
+  verificationId  String?
+  verification    Verification?        @relation(fields: [verificationId], references: [id])
+  tokenAmount     Int
+  carbonSavedKg   Float
+  status          String               @default("available")
+  traceabilityId  String               @unique
+  listings        MarketplaceListing[]
+  createdAt       DateTime             @default(now())
+
+  @@index([plotId])
+  @@index([harvestRecordId])
+  @@index([verificationId])
+}
+
+model MarketplaceListing {
+  id                String          @id @default(cuid())
+  plotId            String
+  plot              Plot            @relation(fields: [plotId], references: [id])
+  harvestRecordId   String?
+  harvestRecord     HarvestRecord?  @relation(fields: [harvestRecordId], references: [id])
+  tokenLotId        String?
+  tokenLot          CarbonTokenLot? @relation(fields: [tokenLotId], references: [id])
+  productName       String
+  quantity          Float
+  unit              String          @default("ton")
+  price             Decimal         @db.Decimal(12, 2)
+  buyerVisibility   String          @default("public")
+  status            ListingStatus   @default(pending_approval)
+  externalListingId String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([plotId])
+  @@index([harvestRecordId])
+  @@index([tokenLotId])
+  @@index([status, createdAt])
+}
+
+model UploadedFile {
+  id                  String               @id @default(cuid())
+  farmerId            String?
+  farmer              FarmerProfile?       @relation(fields: [farmerId], references: [id])
+  fileName            String
+  fileType            String
+  purpose             String
+  storageProvider     String               @default("prototype_metadata")
+  storageKey          String?
+  createdAt           DateTime             @default(now())
+  landDocuments       LandDocument[]
+  plantingRecords     PlantingRecord[]
+  harvestRecords      HarvestRecord[]
+  evidenceSubmissions EvidenceSubmission[]
+
+  @@index([farmerId])
+}
+
+model WorkflowEvent {
+  id        String         @id @default(cuid())
+  farmerId  String
+  farmer    FarmerProfile  @relation(fields: [farmerId], references: [id])
+  status    WorkflowStatus
+  label     String
+  metadata  Json?
+  createdAt DateTime       @default(now())
+
+  @@index([farmerId, createdAt])
+}
