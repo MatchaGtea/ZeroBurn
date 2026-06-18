@@ -1,0 +1,17 @@
+{
+  "name": "ZeroBurn Farmer",
+  "short_name": "ZeroBurn",
+  "description": "Mobile-first farmer workflow app for zero-burn sugarcane verification.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef5ee",
+  "theme_color": "#159447",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
