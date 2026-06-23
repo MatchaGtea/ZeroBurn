@@ -1181,3 +1181,343 @@ p {
   width: 100%;
   margin-bottom: 8px;
 }
+
+/* Factory workspace */
+.factory-canvas {
+  background:
+    radial-gradient(circle at 70% 8%, rgba(21, 148, 71, 0.14), transparent 30%),
+    linear-gradient(135deg, #dce4df 0%, #f2f5f0 100%);
+}
+
+.factory-shell {
+  background:
+    linear-gradient(132deg, rgba(245, 250, 245, 0.96), rgba(232, 240, 235, 0.95)),
+    var(--screen-bg);
+}
+
+.factory-top-bar {
+  align-items: flex-start;
+}
+
+.factory-brand {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.factory-mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  color: #ffffff;
+  background: var(--green);
+  box-shadow: 0 12px 24px rgba(21, 148, 71, 0.22);
+}
+
+.factory-scroll {
+  padding-bottom: 14px;
+}
+
+.factory-bottom-nav {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.factory-page {
+  gap: 14px;
+}
+
+.factory-hero-card {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 25px;
+  background: var(--surface);
+  box-shadow: var(--soft-shadow);
+}
+
+.factory-hero-card > img {
+  width: 118px;
+  height: 132px;
+  border-radius: 20px;
+  object-fit: cover;
+}
+
+.factory-hero-card h2 {
+  overflow-wrap: anywhere;
+}
+
+.factory-search {
+  min-height: 50px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  color: var(--green-deep);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--soft-shadow);
+}
+
+.factory-search input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.factory-filter-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.factory-filter-row::-webkit-scrollbar {
+  display: none;
+}
+
+.factory-filter-row button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--green-deep);
+  background: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.factory-filter-row button.active {
+  color: #ffffff;
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.factory-lot-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  background: rgba(255, 255, 255, 0.88);
+  text-align: left;
+}
+
+.factory-lot-row.active {
+  border-color: rgba(21, 148, 71, 0.45);
+  background: var(--green-soft);
+}
+
+.factory-lot-row img {
+  width: 50px;
+  height: 50px;
+  border-radius: 15px;
+  object-fit: cover;
+}
+
+.factory-lot-row strong,
+.factory-scan-result strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factory-lot-row span,
+.factory-note,
+.factory-scan-result span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.factory-lot-row span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factory-review-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.factory-review-summary div {
+  min-height: 70px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #f6faf5;
+}
+
+.factory-review-summary span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.factory-review-summary strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.factory-evidence-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.factory-evidence-grid img {
+  width: 100%;
+  aspect-ratio: 1.2;
+  border-radius: 17px;
+  object-fit: cover;
+}
+
+.factory-action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.factory-action-grid .danger {
+  color: #a22e36;
+  border-color: rgba(217, 74, 83, 0.24);
+  background: var(--red-soft);
+}
+
+.factory-scan-panel {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px 18px;
+  border: 1px dashed rgba(21, 148, 71, 0.38);
+  border-radius: 25px;
+  color: var(--green-deep);
+  background: rgba(255, 255, 255, 0.82);
+  text-align: center;
+}
+
+.factory-scan-panel h2 {
+  margin-bottom: 0;
+}
+
+.factory-scan-result {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  color: var(--green-deep);
+  background: #ffffff;
+  text-align: left;
+}
+
+.factory-report-bars {
+  display: grid;
+  gap: 13px;
+}
+
+.factory-report-bar {
+  display: grid;
+  gap: 7px;
+}
+
+.factory-report-bar div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.factory-report-bar strong {
+  color: var(--text);
+}
+
+.factory-report-bar::after {
+  grid-row: 2;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #eef2ee;
+  content: "";
+}
+
+.factory-report-bar i {
+  z-index: 1;
+  grid-row: 2;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.factory-bar-green {
+  background: var(--green);
+}
+
+.factory-bar-amber {
+  background: var(--amber);
+}
+
+.factory-bar-red {
+  background: var(--red);
+}
+
+.factory-farmer-link,
+.factory-login-link {
+  text-decoration: none;
+}
+
+.factory-login-link {
+  margin-top: 0;
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 370px) {
+  .factory-hero-card {
+    grid-template-columns: 1fr;
+  }
+
+  .factory-hero-card > img {
+    width: 100%;
+  }
+
+  .factory-action-grid,
+  .factory-review-summary {
+    grid-template-columns: 1fr;
+  }
+}

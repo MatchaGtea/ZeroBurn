@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
-import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Card, FormField, Pill, StatTile, TextAreaField } from './components/ui'
 import { fallbackAppData } from './data/mockData'
+import { FactoryApp } from './factory/FactoryApp'
 import type {
   AppData,
   HarvestRecord,
@@ -102,25 +103,21 @@ type AppActionName = 'profile' | 'plot' | 'planting' | 'harvest' | 'evidence' | 
 type MutationFeedback = { tone: 'success' | 'error'; message: string }
 
 function App() {
+  const location = useLocation()
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('zeroburn_auth_token'))
   const [data, setData] = useState<AppData>(fallbackAppData)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(() => Boolean(token))
   const [submittingAction, setSubmittingAction] = useState<AppActionName | null>(null)
   const [feedback, setFeedback] = useState<MutationFeedback | null>(null)
   const mutationLock = useRef(false)
 
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('zeroburn_auth_token'))
-  const [profileStatus, setProfileStatus] = useState<'loading' | 'unauthenticated' | 'no_profile' | 'loaded'>('loading')
+  const [profileStatus, setProfileStatus] = useState<'loading' | 'unauthenticated' | 'no_profile' | 'loaded'>(() => token ? 'loading' : 'unauthenticated')
 
   useEffect(() => {
     let active = true
     if (!token) {
-      setProfileStatus('unauthenticated')
-      setIsLoading(false)
       return
     }
-
-    setProfileStatus('loading')
-    setIsLoading(true)
 
     refreshAppData()
       .then((loadedData) => {
@@ -264,6 +261,8 @@ function App() {
 
   const handleLogin = (newToken: string) => {
     localStorage.setItem('zeroburn_auth_token', newToken)
+    setProfileStatus('loading')
+    setIsLoading(true)
     setToken(newToken)
   }
 
@@ -278,6 +277,10 @@ function App() {
     clearAuthToken()
     setToken(null)
     setProfileStatus('unauthenticated')
+  }
+
+  if (location.pathname.startsWith('/factory')) {
+    return <FactoryApp />
   }
 
   if (profileStatus === 'loading') {
@@ -1235,6 +1238,9 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
               <button type="submit" className="primary-button full form-submit">
                 เข้าสู่ระบบ
               </button>
+              <Link to="/factory" className="ghost-button full factory-login-link">
+                เปิด Factory Portal
+              </Link>
             </form>
           </div>
         </main>
@@ -1262,8 +1268,8 @@ function RegisterScreen({ onRegister, onLogout }: { onRegister: (profile: Partia
         address: getFormString(form, 'address'),
         consent: true,
       })
-    } catch (err: any) {
-      setError(err?.message ?? 'ลงทะเบียนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'ลงทะเบียนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
     } finally {
       setSubmitting(false)
     }
