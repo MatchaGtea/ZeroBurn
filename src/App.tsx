@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
-import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Card, FormField, Pill, StatTile, TextAreaField } from './components/ui'
 import { fallbackAppData } from './data/mockData'
+import { FactoryApp } from './factory/FactoryApp'
 import type {
   AppData,
   HarvestRecord,
@@ -100,27 +101,53 @@ type AppActions = {
 
 type AppActionName = 'profile' | 'plot' | 'planting' | 'harvest' | 'evidence' | 'approve' | 'reject' | 'listing' | 'listed' | 'sold' | 'workflow'
 type MutationFeedback = { tone: 'success' | 'error'; message: string }
+type DemoRole = 'farmer' | 'factory'
+type DemoSession = { role: DemoRole; username: string }
+
+const DEMO_SESSION_KEY = 'zeroburn_demo_session'
+const FARMER_DEMO_TOKEN = 'mock-token-somchai'
+
+function readDemoSession(): DemoSession | null {
+  if (typeof window === 'undefined') return null
+  const stored = localStorage.getItem(DEMO_SESSION_KEY)
+  if (!stored) return null
+  try {
+    const parsed = JSON.parse(stored) as Partial<DemoSession>
+    if ((parsed.role === 'farmer' || parsed.role === 'factory') && typeof parsed.username === 'string') {
+      return { role: parsed.role, username: parsed.username }
+    }
+  } catch {
+    // Ignore malformed demo session data.
+  }
+  return null
+}
+
+function saveDemoSession(session: DemoSession) {
+  localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(session))
+}
+
+function clearDemoSession() {
+  localStorage.removeItem(DEMO_SESSION_KEY)
+}
 
 function App() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('zeroburn_auth_token'))
+  const [session, setSession] = useState<DemoSession | null>(() => readDemoSession() ?? (localStorage.getItem('zeroburn_auth_token') ? { role: 'farmer', username: 'farmer' } : null))
   const [data, setData] = useState<AppData>(fallbackAppData)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(() => Boolean(token))
   const [submittingAction, setSubmittingAction] = useState<AppActionName | null>(null)
   const [feedback, setFeedback] = useState<MutationFeedback | null>(null)
   const mutationLock = useRef(false)
 
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('zeroburn_auth_token'))
-  const [profileStatus, setProfileStatus] = useState<'loading' | 'unauthenticated' | 'no_profile' | 'loaded'>('loading')
+  const [profileStatus, setProfileStatus] = useState<'loading' | 'unauthenticated' | 'no_profile' | 'loaded'>(() => token ? 'loading' : 'unauthenticated')
 
   useEffect(() => {
     let active = true
     if (!token) {
-      setProfileStatus('unauthenticated')
-      setIsLoading(false)
       return
     }
-
-    setProfileStatus('loading')
-    setIsLoading(true)
 
     refreshAppData()
       .then((loadedData) => {
@@ -262,22 +289,56 @@ function App() {
     },
   }), [runMutation, submittingAction])
 
-  const handleLogin = (newToken: string) => {
-    localStorage.setItem('zeroburn_auth_token', newToken)
-    setToken(newToken)
-  }
-
   const handleRegister = async (profileInput: Partial<FarmerProfile>) => {
+    const nextSession = { role: 'farmer', username: 'farmer' } satisfies DemoSession
+    localStorage.setItem('zeroburn_auth_token', FARMER_DEMO_TOKEN)
+    saveDemoSession(nextSession)
+    setSession(nextSession)
+    setToken(FARMER_DEMO_TOKEN)
     await bootstrapProfile(profileInput)
     const freshData = await refreshAppData()
     setData(freshData)
     setProfileStatus('loaded')
+    setIsLoading(false)
+    navigate('/', { replace: true })
+  }
+
+  const handleDemoLogin = (role: DemoRole, username: string) => {
+    const nextSession = { role, username } satisfies DemoSession
+    saveDemoSession(nextSession)
+    setSession(nextSession)
+
+    if (role === 'factory') {
+      clearAuthToken()
+      setToken(null)
+      setIsLoading(false)
+      setProfileStatus('unauthenticated')
+      navigate('/factory', { replace: true })
+      return
+    }
+
+    localStorage.setItem('zeroburn_auth_token', FARMER_DEMO_TOKEN)
+    setToken(FARMER_DEMO_TOKEN)
+    setIsLoading(true)
+    setProfileStatus('loading')
+    navigate('/', { replace: true })
+  }
+
+  const handleFactoryRegister = () => {
+    handleDemoLogin('factory', 'factory')
   }
 
   const handleLogout = () => {
     clearAuthToken()
+    clearDemoSession()
     setToken(null)
+    setSession(null)
     setProfileStatus('unauthenticated')
+    navigate('/', { replace: true })
+  }
+
+  if (location.pathname.startsWith('/factory')) {
+    return session?.role === 'factory' ? <FactoryApp onLogout={handleLogout} /> : <Navigate to="/" replace />
   }
 
   if (profileStatus === 'loading') {
@@ -293,7 +354,16 @@ function App() {
   }
 
   if (profileStatus === 'unauthenticated') {
-    return <LoginScreen onLogin={handleLogin} />
+    if (location.pathname === '/login') {
+      return <LoginScreen onLogin={handleDemoLogin} />
+    }
+    if (location.pathname === '/signup/farmer') {
+      return <RegisterScreen onRegister={handleRegister} onLogout={handleLogout} />
+    }
+    if (location.pathname === '/signup/factory') {
+      return <FactoryRegisterScreen onRegister={handleFactoryRegister} />
+    }
+    return <WelcomeScreen />
   }
 
   if (profileStatus === 'no_profile') {
@@ -1174,26 +1244,52 @@ function getFormFile(form: FormData, name: string): File | undefined {
   return value instanceof File && value.size > 0 ? value : undefined
 }
 
-function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
-  const [farmerName, setFarmerName] = useState('somchai')
-  const [customToken, setCustomToken] = useState('')
-  const [isSupabase, setIsSupabase] = useState(false)
+function WelcomeScreen() {
+  return (
+    <div className="app-canvas">
+      <div className="phone-shell login-shell">
+        <header className="top-bar" style={{ justifyContent: 'center' }}>
+          <strong>ZeroBurn</strong>
+        </header>
+        <main className="screen-scroll centered-content">
+          <div className="login-card welcome-card">
+            <div className="mascot-frame login-mascot">
+              <img src={mascotWelcome} alt="ยินดีต้อนรับ" />
+            </div>
+            <h2>เริ่มใช้งาน ZeroBurn</h2>
+            <p className="login-subtitle">ระบบรับรองผลผลิตไม่เผา ตลาดรับซื้อ และกระเป๋า token สำหรับอ้อยสด</p>
+            <div className="welcome-actions">
+              <Link to="/signup/farmer" className="primary-button full">สมัครเป็นเกษตรกร</Link>
+              <Link to="/signup/factory" className="ghost-button full">สมัครเป็นบริษัท/โรงงาน</Link>
+              <Link to="/login" className="ghost-button full">Login</Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  )
+}
+
+function LoginScreen({ onLogin }: { onLogin: (role: DemoRole, username: string) => void }) {
+  const [username, setUsername] = useState('farmer')
+  const [password, setPassword] = useState('demo123')
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    if (isSupabase) {
-      if (!customToken) return
-      onLogin(customToken)
-    } else {
-      onLogin(`mock-token-${farmerName.trim().toLowerCase()}`)
+    const normalizedUsername = username.trim().toLowerCase()
+    if (password !== 'demo123' || (normalizedUsername !== 'farmer' && normalizedUsername !== 'factory')) {
+      setError('บัญชี demo ใช้ farmer/demo123 หรือ factory/demo123')
+      return
     }
+    onLogin(normalizedUsername === 'factory' ? 'factory' : 'farmer', normalizedUsername)
   }
 
   return (
     <div className="app-canvas">
       <div className="phone-shell login-shell">
         <header className="top-bar" style={{ justifyContent: 'center' }}>
-          <strong>ZeroBurn Farmer</strong>
+          <strong>ZeroBurn Login</strong>
         </header>
         <main className="screen-scroll centered-content">
           <div className="login-card">
@@ -1201,42 +1297,84 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
               <img src={mascotWelcome} alt="ยินดีต้อนรับ" />
             </div>
             <h2>เข้าสู่ระบบ ZeroBurn</h2>
-            <p className="login-subtitle">ระบบรับรองผลผลิตไม่เผาและขายพร้อมแต้มคาร์บอน</p>
+            <p className="login-subtitle">ใส่ username และ password ระบบจะพาไปหน้าที่ตรงกับบทบาท</p>
 
             <form onSubmit={handleSubmit} className="form-grid" style={{ width: '100%' }}>
-              <div className="tabs segmented" style={{ gridColumn: '1 / -1' }}>
-                <button type="button" className={!isSupabase ? 'active' : ''} onClick={() => setIsSupabase(false)}>Mock Login</button>
-                <button type="button" className={isSupabase ? 'active' : ''} onClick={() => setIsSupabase(true)}>Supabase Token</button>
-              </div>
-
-              {!isSupabase ? (
-                <label className="form-field" style={{ gridColumn: '1 / -1' }}>
-                  <span>เลือกเกษตรกรจำลอง</span>
-                  <select value={farmerName} onChange={(e) => setFarmerName(e.target.value)}>
-                    <option value="somchai">สมชาย สุขใจ (มีข้อมูลแล้ว)</option>
-                    <option value="somsri">สมศรี รักเกษตร (สร้างใหม่)</option>
-                    <option value="anon">เกษตรกรทั่วไป (สร้างใหม่)</option>
-                  </select>
-                </label>
-              ) : (
-                <label className="form-field" style={{ gridColumn: '1 / -1' }}>
-                  <span>Supabase Access Token (JWT)</span>
-                  <input
-                    name="supabaseToken"
-                    type="text"
-                    placeholder="ใส่ JWT Token จาก Supabase"
-                    value={customToken}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setCustomToken(e.target.value)}
-                    required
-                  />
-                </label>
-              )}
+              {error && <div className="mutation-notice mutation-notice-error">{error}</div>}
+              <label className="form-field" style={{ gridColumn: '1 / -1' }}>
+                <span>Username</span>
+                <input
+                  name="username"
+                  type="text"
+                  placeholder="farmer หรือ factory"
+                  value={username}
+                  onChange={(event) => {
+                    setUsername(event.target.value)
+                    setError(null)
+                  }}
+                  required
+                />
+              </label>
+              <label className="form-field" style={{ gridColumn: '1 / -1' }}>
+                <span>Password</span>
+                <input
+                  name="password"
+                  type="password"
+                  placeholder="demo123"
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value)
+                    setError(null)
+                  }}
+                  required
+                />
+              </label>
 
               <button type="submit" className="primary-button full form-submit">
                 เข้าสู่ระบบ
               </button>
+              <Link to="/" className="ghost-button full factory-login-link">
+                กลับหน้าแรก
+              </Link>
             </form>
           </div>
+        </main>
+      </div>
+    </div>
+  )
+}
+
+function FactoryRegisterScreen({ onRegister }: { onRegister: () => void }) {
+  return (
+    <div className="app-canvas">
+      <div className="phone-shell login-shell">
+        <header className="top-bar" style={{ justifyContent: 'center' }}>
+          <strong>สมัครบริษัท/โรงงาน</strong>
+        </header>
+        <main className="screen-scroll">
+          <div className="guide-media">
+            <img className="guide-photo" src={sugarcaneImage} alt="" />
+            <div className="guide-bubble">
+              <img src={mascotSell} alt="" />
+              <p>สร้างบัญชีโรงงาน demo เพื่อเข้าตลาดรับซื้อ ตรวจหลักฐาน และรับ token หลังซื้อขายสำเร็จ</p>
+            </div>
+          </div>
+          <form className="form-grid pad-all" onSubmit={(event) => {
+            event.preventDefault()
+            onRegister()
+          }}>
+            <FormField label="ชื่อบริษัท/โรงงาน" name="factoryName" defaultValue="Nakhon Sawan Sugar Mill" required />
+            <FormField label="ชื่อผู้ประสานงาน" name="officerName" defaultValue="คุณมณีรัตน์" required />
+            <FormField label="จังหวัด" name="province" defaultValue="นครสวรรค์" required />
+            <FormField label="กำลังรับซื้อ/วัน" name="capacity" type="number" defaultValue={2400} required />
+            <label className="consent-row" style={{ gridColumn: '1 / -1' }}><input type="checkbox" required defaultChecked /> ยืนยันใช้งานในฐานะผู้ซื้อผลผลิต Zero-Burn</label>
+            <button className="primary-button form-submit" type="submit">
+              สมัครและเข้า Factory Portal
+            </button>
+            <Link to="/" className="ghost-button full" style={{ gridColumn: '1 / -1', textDecoration: 'none' }}>
+              กลับหน้าแรก
+            </Link>
+          </form>
         </main>
       </div>
     </div>
@@ -1262,8 +1400,8 @@ function RegisterScreen({ onRegister, onLogout }: { onRegister: (profile: Partia
         address: getFormString(form, 'address'),
         consent: true,
       })
-    } catch (err: any) {
-      setError(err?.message ?? 'ลงทะเบียนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'ลงทะเบียนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
     } finally {
       setSubmitting(false)
     }
