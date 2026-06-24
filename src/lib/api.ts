@@ -205,6 +205,9 @@ function handleMockRequest<T>(path: string, init?: RequestInit): T {
   if (path === '/bootstrap') {
     return getLocalData() as unknown as T
   }
+  if (path === '/auth/profile') {
+    return localUpdateProfile(body ?? {}) as unknown as T
+  }
   if (path === '/profile') {
     if (init?.method === 'PATCH') {
       return localUpdateProfile(body) as unknown as T

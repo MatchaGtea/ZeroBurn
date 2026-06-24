@@ -41,3 +41,9 @@ Build the factory-facing ZeroBurn workspace for sugar mill officers who review v
 - `npm run lint`
 - `npm run build`
 - Browser smoke check at `/factory` in desktop and mobile widths.
+
+## Progress Log
+
+- 2026-06-23: Merged the `lnwmon` factory workspace into local `main`.
+- 2026-06-25: Application review pass changed the demo direction from a direct factory portal link to a role-based landing/login flow. `/factory` now belongs behind a factory demo session, farmer/company registration enters the app directly without a 404 bootstrap path, and the factory surface behaves like a buyer marketplace instead of auto-selling lots.
+- 2026-06-25: Expanded the factory marketplace mock flow with purchase requests, delivery/payment confirmation, token amount display, and a factory token wallet for completed orders.

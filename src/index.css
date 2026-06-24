@@ -1182,6 +1182,20 @@ p {
   margin-bottom: 8px;
 }
 
+.welcome-card {
+  align-content: center;
+}
+
+.welcome-actions {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+}
+
+.welcome-actions a {
+  text-decoration: none;
+}
+
 /* Factory workspace */
 .factory-canvas {
   background:
@@ -1223,7 +1237,18 @@ p {
 }
 
 .factory-bottom-nav {
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  padding-inline: 10px;
+}
+
+.factory-bottom-nav .nav-tab {
+  min-width: 0;
+  padding-inline: 4px;
+}
+
+.factory-bottom-nav .nav-tab span {
+  font-size: 10px;
 }
 
 .factory-page {
@@ -1430,6 +1455,25 @@ p {
   margin-bottom: 0;
 }
 
+.factory-scan-lookup {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+}
+
+.factory-scan-lookup .factory-search {
+  box-shadow: none;
+}
+
+.factory-lookup-message {
+  margin: 0;
+  color: var(--green-deep);
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .factory-scan-result {
   width: 100%;
   min-height: 58px;
@@ -1443,6 +1487,65 @@ p {
   color: var(--green-deep);
   background: #ffffff;
   text-align: left;
+}
+
+.factory-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 22px 12px;
+  color: var(--green-deep);
+  text-align: center;
+}
+
+.factory-empty-state strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.factory-empty-state span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.factory-order-card,
+.factory-wallet-row {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.factory-order-card > div:first-child,
+.factory-wallet-row > div {
+  min-width: 0;
+}
+
+.factory-order-card strong,
+.factory-wallet-row strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factory-order-card span,
+.factory-wallet-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.factory-wallet-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
 }
 
 .factory-report-bars {
@@ -1508,6 +1611,14 @@ p {
 }
 
 @media (max-width: 370px) {
+  .factory-scan-lookup {
+    grid-template-columns: 1fr;
+  }
+
+  .factory-scan-lookup .primary-button {
+    width: 100%;
+  }
+
   .factory-hero-card {
     grid-template-columns: 1fr;
   }

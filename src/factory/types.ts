@@ -1,9 +1,12 @@
 export type FactoryLotStatus =
+  | 'available'
   | 'pending_review'
   | 'verified'
   | 'needs_info'
-  | 'approved'
-  | 'scheduled'
+  | 'purchase_requested'
+  | 'delivering'
+  | 'goods_received'
+  | 'payment_confirmed'
   | 'completed'
   | 'rejected'
 
@@ -26,10 +29,20 @@ export interface FactoryLot {
   risk: BurnRisk
   traceabilityId: string
   tokenId?: string
+  tokenAmount: number
   carbonSavedKg: number
   pricePerTon: number
   evidence: string[]
   notes: string
+}
+
+export interface FactoryWalletToken {
+  id: string
+  traceabilityId: string
+  farmName: string
+  farmerName: string
+  tokenAmount: number
+  carbonSavedKg: number
 }
 
 export interface FactoryProfile {
